@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import React, { useState, useEffect } from "react";
-import { useOrganization } from "@clerk/nextjs";
+import { useOrganization } from "@/contexts/organization.context";
 import { useInterviews } from "@/contexts/interviews.context";
 import { Share2, Filter, Pencil, UserIcon, Eye, Palette } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -67,6 +67,59 @@ function InterviewHome({ params, searchParams }: Props) {
   const { organization } = useOrganization();
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
 
+  // Suppress react-color defaultProps warnings in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      
+      console.warn = (...args) => {
+        const message = args[0]?.toString?.() || '';
+        if (
+          message.includes('defaultProps will be removed from function components') ||
+          message.includes('Support for defaultProps will be removed from function components') ||
+          message.includes('Checkboard: Support for defaultProps')
+        ) {
+          return;
+        }
+        originalWarn(...args);
+      };
+
+      console.error = (...args) => {
+        const message = args[0]?.toString?.() || '';
+        if (
+          message.includes('defaultProps will be removed from function components') ||
+          message.includes('Support for defaultProps will be removed from function components') ||
+          message.includes('Checkboard: Support for defaultProps')
+        ) {
+          return;
+        }
+        originalError(...args);
+      };
+      
+      return () => {
+        console.warn = originalWarn;
+        console.error = originalError;
+      };
+    }
+  }, []);
+
+  // Safety check for interview ID
+  const interviewId = params?.interviewId;
+  
+  if (!interviewId || interviewId === 'null' || interviewId === 'undefined') {
+    console.error('Invalid interview ID:', interviewId);
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <h1 className="text-2xl font-bold text-red-500 mb-4">Invalid Interview</h1>
+        <p className="text-gray-600 mb-4">The interview ID is invalid or missing.</p>
+        <Button onClick={() => router.push('/dashboard')}>
+          Return to Dashboard
+        </Button>
+      </div>
+    );
+  }
+
   const seeInterviewPreviewPage = () => {
     const protocol = base_url?.includes("localhost") ? "http" : "https";
     if (interview?.url) {
@@ -83,8 +136,10 @@ function InterviewHome({ params, searchParams }: Props) {
 
   useEffect(() => {
     const fetchInterview = async () => {
+      if (!interviewId) return;
+      
       try {
-        const response = await getInterviewById(params.interviewId);
+        const response = await getInterviewById(interviewId);
         setInterview(response);
         setIsActive(response.is_active);
         setIsViewed(response.is_viewed);
@@ -92,7 +147,7 @@ function InterviewHome({ params, searchParams }: Props) {
         seticonColor(response.theme_color ?? "#4F46E5");
         setLoading(true);
       } catch (error) {
-        console.error(error);
+        console.error('Error fetching interview:', error);
       } finally {
         setLoading(false);
       }
@@ -102,7 +157,7 @@ function InterviewHome({ params, searchParams }: Props) {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getInterviewById, params.interviewId, isGeneratingInsights]);
+  }, [getInterviewById, interviewId, isGeneratingInsights]);
 
   useEffect(() => {
     const fetchOrganizationData = async () => {
@@ -120,16 +175,17 @@ function InterviewHome({ params, searchParams }: Props) {
 
     fetchOrganizationData();
   }, [organization]);
+  
   useEffect(() => {
     const fetchResponses = async () => {
+      if (!interviewId) return;
+      
       try {
-        const response = await ResponseService.getAllResponses(
-          params.interviewId,
-        );
+        const response = await ResponseService.getAllResponses(interviewId);
         setResponses(response);
         setLoading(true);
       } catch (error) {
-        console.error(error);
+        console.error('Error fetching responses:', error);
       } finally {
         setLoading(false);
       }
@@ -137,15 +193,15 @@ function InterviewHome({ params, searchParams }: Props) {
 
     fetchResponses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [interviewId]);
 
   const handleDeleteResponse = (deletedCallId: string) => {
-    if (responses) {
+    if (responses && interviewId) {
       setResponses(
         responses.filter((response) => response.call_id !== deletedCallId),
       );
       if (searchParams.call === deletedCallId) {
-        router.push(`/interviews/${params.interviewId}`);
+        router.push(`/interviews/${interviewId}`);
       }
     }
   };
@@ -172,7 +228,7 @@ function InterviewHome({ params, searchParams }: Props) {
 
       await InterviewService.updateInterview(
         { is_active: updatedIsActive },
-        params.interviewId,
+        interviewId,
       );
 
       toast.success("Interview status updated", {
@@ -195,7 +251,7 @@ function InterviewHome({ params, searchParams }: Props) {
     try {
       await InterviewService.updateInterview(
         { theme_color: newColor },
-        params.interviewId,
+        interviewId,
       );
 
       toast.success("Theme color updated", {
@@ -355,7 +411,7 @@ function InterviewHome({ params, searchParams }: Props) {
                     className="bg-transparent shadow-none text-xs text-indigo-600 px-0 h-7 hover:scale-110 relative"
                     onClick={(event) => {
                       router.push(
-                        `/interviews/${params.interviewId}?edit=true`,
+                        `/interviews/${interviewId}?edit=true`,
                       );
                     }}
                   >
@@ -461,7 +517,7 @@ function InterviewHome({ params, searchParams }: Props) {
                       key={response?.id}
                       onClick={() => {
                         router.push(
-                          `/interviews/${params.interviewId}?call=${response.call_id}`,
+                          `/interviews/${interviewId}?call=${response.call_id}`,
                         );
                         handleResponseClick(response);
                       }}
@@ -566,16 +622,18 @@ function InterviewHome({ params, searchParams }: Props) {
           <h3 className="text-lg font-semibold mb-4 text-center">
             Choose a Theme Color
           </h3>
-          <ChromePicker
-            disableAlpha={true}
-            color={themeColor}
-            styles={{
-              default: {
-                picker: { width: "100%" },
-              },
-            }}
-            onChange={handleColorChange}
-          />
+          <div role="application" aria-label="Color picker for interview theme">
+            <ChromePicker
+              disableAlpha={true}
+              color={themeColor}
+              styles={{
+                default: {
+                  picker: { width: "100%" },
+                },
+              }}
+              onChange={handleColorChange}
+            />
+          </div>
         </div>
       </Modal>
       {isSharePopupOpen && (

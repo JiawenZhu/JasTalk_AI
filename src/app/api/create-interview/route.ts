@@ -12,8 +12,10 @@ export async function POST(req: Request, res: Response) {
     const body = await req.json();
 
     logger.info("create-interview request received");
+    console.log("Request body:", body);
 
     const payload = body.interviewData;
+    console.log("Interview payload:", payload);
 
     let readableSlug = null;
     if (body.organizationName) {
@@ -24,12 +26,16 @@ export async function POST(req: Request, res: Response) {
       readableSlug = `${orgNameSlug}-${interviewNameSlug}`;
     }
 
-    const newInterview = await InterviewService.createInterview({
+    const finalPayload = {
       ...payload,
       url: url,
       id: url_id,
       readable_slug: readableSlug,
-    });
+    };
+
+    console.log("Final payload being sent to database:", finalPayload);
+
+    const newInterview = await InterviewService.createInterview(finalPayload);
 
     logger.info("Interview created successfully");
 
@@ -38,10 +44,34 @@ export async function POST(req: Request, res: Response) {
       { status: 200 },
     );
   } catch (err) {
+    console.error("Error creating interview:", err);
+    
+    // More detailed error logging
+    if (err && typeof err === 'object') {
+      console.error("Error details:", JSON.stringify(err, null, 2));
+    }
+    
     logger.error("Error creating interview");
 
+    let errorMessage = "Internal server error";
+    let errorDetails = "Unknown error";
+
+    if (err instanceof Error) {
+      errorMessage = err.message;
+      errorDetails = err.message;
+    } else if (err && typeof err === 'object' && 'message' in err) {
+      errorMessage = (err as any).message;
+      errorDetails = JSON.stringify(err);
+    } else {
+      errorDetails = String(err);
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      { 
+        error: errorMessage,
+        details: errorDetails,
+        type: err?.constructor?.name || typeof err
+      },
       { status: 500 },
     );
   }

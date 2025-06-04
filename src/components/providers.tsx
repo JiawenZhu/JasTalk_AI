@@ -4,6 +4,8 @@ import React from "react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { type ThemeProviderProps } from "next-themes/dist/types";
 import compose from "@/lib/compose";
+import { AuthProvider } from "@/contexts/auth.context";
+import { OrganizationProvider } from "@/contexts/organization.context";
 import { InterviewerProvider } from "@/contexts/interviewers.context";
 import { InterviewProvider } from "@/contexts/interviews.context";
 import { ResponseProvider } from "@/contexts/responses.context";
@@ -14,6 +16,8 @@ const queryClient = new QueryClient();
 
 const providers = ({ children }: ThemeProviderProps) => {
   const Provider = compose([
+    AuthProvider,
+    OrganizationProvider,
     InterviewProvider,
     InterviewerProvider,
     ResponseProvider,

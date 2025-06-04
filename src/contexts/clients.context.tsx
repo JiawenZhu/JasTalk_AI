@@ -2,16 +2,19 @@
 
 import React, { useState, useContext, ReactNode, useEffect } from "react";
 import { User } from "@/types/user";
-import { useClerk, useOrganization } from "@clerk/nextjs";
+import { useAuth } from "@/contexts/auth.context";
+import { useOrganization } from "@/contexts/organization.context";
 import { ClientService } from "@/services/clients.service";
 
 interface ClientContextProps {
   client?: User;
 }
 
-export const ClientContext = React.createContext<ClientContextProps>({
+const ClientContext = React.createContext<ClientContextProps>({
   client: undefined,
 });
+
+export const useClient = () => useContext(ClientContext);
 
 interface ClientProviderProps {
   children: ReactNode;
@@ -19,7 +22,7 @@ interface ClientProviderProps {
 
 export function ClientProvider({ children }: ClientProviderProps) {
   const [client, setClient] = useState<User>();
-  const { user } = useClerk();
+  const { user } = useAuth();
   const { organization } = useOrganization();
 
   const [clientLoading, setClientLoading] = useState(true);
@@ -29,7 +32,7 @@ export function ClientProvider({ children }: ClientProviderProps) {
       setClientLoading(true);
       const response = await ClientService.getClientById(
         user?.id as string,
-        user?.emailAddresses[0]?.emailAddress as string,
+        user?.email as string,
         organization?.id as string,
       );
       setClient(response);
@@ -76,9 +79,3 @@ export function ClientProvider({ children }: ClientProviderProps) {
     </ClientContext.Provider>
   );
 }
-
-export const useClient = () => {
-  const value = useContext(ClientContext);
-
-  return value;
-};

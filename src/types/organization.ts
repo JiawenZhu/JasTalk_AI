@@ -1,8 +1,9 @@
 export interface Organization {
   id: string;
-  created_at: Date;
-  image_url: string;
   name: string;
-  plan: string;
-  allowed_responses_count: number;
+  user_id: string;
+  image_url?: string;
+  allowed_responses_count?: number;
+  plan?: 'free' | 'pro' | 'free_trial_over';
+  created_at?: string;
 }

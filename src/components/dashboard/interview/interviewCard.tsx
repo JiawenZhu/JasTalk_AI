@@ -26,6 +26,12 @@ function InterviewCard({ name, interviewerId, id, url, readableSlug }: Props) {
   const [isFetching, setIsFetching] = useState(false);
   const [img, setImg] = useState("");
 
+  // Don't render if ID is null or invalid
+  if (!id || id === 'null' || id === 'undefined') {
+    console.warn('InterviewCard: Invalid interview ID provided:', id);
+    return null;
+  }
+
   useEffect(() => {
     const fetchInterviewer = async () => {
       const interviewer =

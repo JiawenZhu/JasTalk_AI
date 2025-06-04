@@ -10,11 +10,27 @@ function CreateInterviewerButton() {
   const [isLoading, setIsLoading] = useState(false);
 
   const createInterviewers = async () => {
-    setIsLoading(true);
-    const response = await axios.get("/api/create-interviewer", {});
-    console.log(response);
-    setIsLoading(false);
-    InterviewerService.getAllInterviewers();
+    try {
+      setIsLoading(true);
+      
+      // Check if we're in development mode
+      const isSupabaseConfigured = Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
+      if (!isSupabaseConfigured) {
+        console.log('Development mode: Cannot create real interviewers without Supabase configuration');
+        return;
+      }
+
+      const response = await axios.get("/api/create-interviewer", {});
+      console.log(response);
+      InterviewerService.getAllInterviewers();
+    } catch (error) {
+      console.error('Error creating interviewers:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

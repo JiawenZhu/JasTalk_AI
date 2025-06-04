@@ -142,128 +142,134 @@ function DetailsPopup({
 
   return (
     <>
-      <div className="text-center w-[38rem]">
-        <h1 className="text-xl font-semibold">Create an Interview</h1>
-        <div className="flex flex-col justify-center items-start mt-4 ml-10 mr-8">
-          <div className="flex flex-row justify-center items-center">
-            <h3 className="text-sm font-medium">Interview Name:</h3>
+      <div className="text-center w-full mx-auto">
+        <h1 className="text-xl font-semibold mb-8">Create an Interview</h1>
+        <div className="flex flex-col justify-center items-start mt-6 space-y-8 px-4">
+          <div className="flex flex-col lg:flex-row justify-center items-start lg:items-center w-full gap-4">
+            <h3 className="text-sm font-medium whitespace-nowrap min-w-fit">Interview Name:</h3>
             <input
               type="text"
-              className="border-b-2 focus:outline-none border-gray-500 px-2 w-96 py-0.5 ml-3"
+              className="border-b-2 focus:outline-none border-gray-500 px-3 py-2 w-full max-w-xl"
               placeholder="e.g. Name of the Interview"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={(e) => setName(e.target.value.trim())}
             />
           </div>
-          <h3 className="text-sm mt-3 font-medium">Select an Interviewer:</h3>
-          <div className="relative flex items-center mt-1">
-            <div
-              id="slider-3"
-              className=" h-36 pt-1 overflow-x-scroll scroll whitespace-nowrap scroll-smooth scrollbar-hide w-[27.5rem]"
-            >
-              {interviewers.map((item, key) => (
-                <div
-                  className=" p-0 inline-block cursor-pointer ml-1 mr-5 rounded-xl shrink-0 overflow-hidden"
-                  key={item.id}
-                >
-                  <button
-                    className="absolute ml-9"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInterviewerDetails(item);
-                      setOpenInterviewerDetails(true);
-                    }}
-                  >
-                    <Info size={18} color="#4f46e5" strokeWidth={2.2} />
-                  </button>
+          <div className="w-full">
+            <h3 className="text-sm font-medium mb-4">Select an Interviewer:</h3>
+            <div className="relative flex items-center">
+              <div
+                id="slider-3"
+                className="h-44 pt-3 overflow-x-scroll scroll whitespace-nowrap scroll-smooth scrollbar-hide w-full"
+              >
+                {interviewers.map((item, key) => (
                   <div
-                    className={`w-[96px] overflow-hidden rounded-full ${
-                      selectedInterviewer === item.id
-                        ? "border-4 border-indigo-600"
-                        : ""
-                    }`}
-                    onClick={() => setSelectedInterviewer(item.id)}
+                    className="p-0 inline-block cursor-pointer ml-1 mr-8 rounded-xl shrink-0 overflow-hidden"
+                    key={item.id}
                   >
-                    <Image
-                      src={item.image}
-                      alt="Picture of the interviewer"
-                      width={70}
-                      height={70}
-                      className="w-full h-full object-cover"
-                    />
+                    <button
+                      className="absolute ml-9 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInterviewerDetails(item);
+                        setOpenInterviewerDetails(true);
+                      }}
+                    >
+                      <Info size={18} color="#4f46e5" strokeWidth={2.2} />
+                    </button>
+                    <div
+                      className={`w-[96px] overflow-hidden rounded-full ${
+                        selectedInterviewer === item.id
+                          ? "border-4 border-indigo-600"
+                          : ""
+                      }`}
+                      onClick={() => setSelectedInterviewer(item.id)}
+                    >
+                      <Image
+                        src={item.image}
+                        alt="Picture of the interviewer"
+                        width={70}
+                        height={70}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <CardTitle className="mt-2 text-xs text-center">
+                      {item.name}
+                    </CardTitle>
                   </div>
-                  <CardTitle className="mt-0 text-xs text-center">
-                    {item.name}
-                  </CardTitle>
-                </div>
-              ))}
-            </div>
-            {interviewers.length > 4 ? (
-              <div className="flex-row justify-center ml-3 mb-1 items-center space-y-6">
-                <ChevronRight
-                  className="opacity-50 cursor-pointer hover:opacity-100"
-                  size={27}
-                  onClick={() => slideRight("slider-3", 115)}
-                />
-                <ChevronLeft
-                  className="opacity-50 cursor-pointer hover:opacity-100"
-                  size={27}
-                  onClick={() => slideLeft("slider-3", 115)}
-                />
+                ))}
               </div>
-            ) : (
-              <></>
-            )}
+              {interviewers.length > 4 ? (
+                <div className="hidden lg:flex flex-col justify-center ml-3 mb-1 items-center space-y-6">
+                  <ChevronRight
+                    className="opacity-50 cursor-pointer hover:opacity-100"
+                    size={27}
+                    onClick={() => slideRight("slider-3", 115)}
+                  />
+                  <ChevronLeft
+                    className="opacity-50 cursor-pointer hover:opacity-100"
+                    size={27}
+                    onClick={() => slideLeft("slider-3", 115)}
+                  />
+                </div>
+              ) : (
+                <></>
+              )}
+            </div>
           </div>
-          <h3 className="text-sm font-medium">Objective:</h3>
-          <Textarea
-            value={objective}
-            className="h-24 mt-2 border-2 border-gray-500 w-[33.2rem]"
-            placeholder="e.g. Find best candidates based on their technical skills and previous projects."
-            onChange={(e) => setObjective(e.target.value)}
-            onBlur={(e) => setObjective(e.target.value.trim())}
-          />
-          <h3 className="text-sm font-medium mt-2">
-            Upload any documents related to the interview.
-          </h3>
-          <FileUpload
-            isUploaded={isUploaded}
-            setIsUploaded={setIsUploaded}
-            fileName={fileName}
-            setFileName={setFileName}
-            setUploadedDocumentContext={setUploadedDocumentContext}
-          />
-          <label className="flex-col mt-7 w-full">
-            <div className="flex items-center cursor-pointer">
+          <div className="w-full">
+            <h3 className="text-sm font-medium mb-4">Objective:</h3>
+            <Textarea
+              value={objective}
+              className="h-32 border-2 border-gray-500 w-full resize-none p-3"
+              placeholder="e.g. Find best candidates based on their technical skills and previous projects."
+              onChange={(e) => setObjective(e.target.value)}
+              onBlur={(e) => setObjective(e.target.value.trim())}
+            />
+          </div>
+          <div className="w-full">
+            <h3 className="text-sm font-medium mb-4">
+              Upload any documents related to the interview.
+            </h3>
+            <FileUpload
+              isUploaded={isUploaded}
+              setIsUploaded={setIsUploaded}
+              fileName={fileName}
+              setFileName={setFileName}
+              setUploadedDocumentContext={setUploadedDocumentContext}
+            />
+          </div>
+          <div className="w-full pt-4">
+            <div className="flex items-center cursor-pointer gap-4">
               <span className="text-sm font-medium">
                 Do you prefer the interviewees&apos; responses to be anonymous?
               </span>
               <Switch
                 checked={isAnonymous}
-                className={`ml-4 mt-1 ${
+                className={`${
                   isAnonymous ? "bg-indigo-600" : "bg-[#E6E7EB]"
                 }`}
                 onCheckedChange={(checked) => setIsAnonymous(checked)}
               />
             </div>
             <span
-              style={{ fontSize: "0.7rem", lineHeight: "0.66rem" }}
-              className="font-light text-xs italic w-full text-left block"
+              style={{ fontSize: "0.7rem", lineHeight: "1rem" }}
+              className="font-light text-xs italic w-full text-left block mt-3"
             >
               Note: If not anonymous, the interviewee&apos;s email and name will
               be collected.
             </span>
-          </label>
-          <div className="flex flex-row gap-3 justify-between w-full mt-3">
-            <div className="flex flex-row justify-center items-center ">
-              <h3 className="text-sm font-medium ">Number of Questions:</h3>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 justify-center lg:justify-between w-full pt-4">
+            <div className="flex flex-row justify-center items-center gap-4">
+              <h3 className="text-sm font-medium whitespace-nowrap">Number of Questions:</h3>
               <input
                 type="number"
                 step="1"
                 max="5"
                 min="1"
-                className="border-b-2 text-center focus:outline-none  border-gray-500 w-14 px-2 py-0.5 ml-3"
+                className="border-b-2 text-center focus:outline-none border-gray-500 w-20 px-3 py-2"
                 value={numQuestions}
                 onChange={(e) => {
                   let value = e.target.value;
@@ -279,14 +285,14 @@ function DetailsPopup({
                 }}
               />
             </div>
-            <div className="flex flex-row justify-center items-center">
-              <h3 className="text-sm font-medium ">Duration (mins):</h3>
+            <div className="flex flex-row justify-center items-center gap-4">
+              <h3 className="text-sm font-medium whitespace-nowrap">Duration (mins):</h3>
               <input
                 type="number"
                 step="1"
                 max="10"
                 min="1"
-                className="border-b-2 text-center focus:outline-none  border-gray-500 w-14 px-2 py-0.5 ml-3"
+                className="border-b-2 text-center focus:outline-none border-gray-500 w-20 px-3 py-2"
                 value={duration}
                 onChange={(e) => {
                   let value = e.target.value;
@@ -303,7 +309,7 @@ function DetailsPopup({
               />
             </div>
           </div>
-          <div className="flex flex-row w-full justify-center items-center space-x-24 mt-5">
+          <div className="flex flex-col lg:flex-row w-full justify-center items-center gap-6 lg:gap-16 pt-8 pb-4">
             <Button
               disabled={
                 (name &&
@@ -314,7 +320,7 @@ function DetailsPopup({
                   ? false
                   : true) || isClicked
               }
-              className="bg-indigo-600 hover:bg-indigo-800  w-40"
+              className="bg-indigo-600 hover:bg-indigo-800 w-full lg:w-56 h-12 text-base"
               onClick={() => {
                 setIsClicked(true);
                 onGenrateQuestions();
@@ -332,7 +338,7 @@ function DetailsPopup({
                   ? false
                   : true) || isClicked
               }
-              className="bg-indigo-600 w-40 hover:bg-indigo-800"
+              className="bg-indigo-600 w-full lg:w-56 h-12 text-base hover:bg-indigo-800"
               onClick={() => {
                 setIsClicked(true);
                 onManual();

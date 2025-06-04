@@ -3,7 +3,7 @@
 import React, { useState, useContext, ReactNode, useEffect } from "react";
 import { Interviewer } from "@/types/interviewer";
 import { InterviewerService } from "@/services/interviewers.service";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth } from "@/contexts/auth.context";
 
 interface InterviewerContextProps {
   interviewers: Interviewer[];
@@ -13,45 +13,106 @@ interface InterviewerContextProps {
   setInterviewersLoading: (interviewersLoading: boolean) => void;
 }
 
-export const InterviewerContext = React.createContext<InterviewerContextProps>({
+const InterviewerContext = React.createContext<InterviewerContextProps>({
   interviewers: [],
   setInterviewers: () => {},
   createInterviewer: () => {},
   interviewersLoading: false,
-  setInterviewersLoading: () => undefined,
+  setInterviewersLoading: () => {},
 });
+
+export const useInterviewers = () => useContext(InterviewerContext);
 
 interface InterviewerProviderProps {
   children: ReactNode;
 }
 
+// Mock interviewers for development mode
+const mockInterviewers: Interviewer[] = [
+  {
+    id: BigInt(1),
+    user_id: "mock-user-id",
+    created_at: new Date(),
+    name: "Explorer Lisa",
+    rapport: 7,
+    exploration: 10,
+    empathy: 7,
+    speed: 5,
+    image: "/interviewers/Lisa.png",
+    description: "Hi! I'm Lisa, an enthusiastic and empathetic interviewer who loves to explore. With a perfect balance of empathy and rapport, I delve deep into conversations while maintaining a steady pace. Let's embark on this journey together and uncover meaningful insights!",
+    audio: "Lisa.wav",
+    agent_id: "mock-agent-lisa",
+  },
+  {
+    id: BigInt(2),
+    user_id: "mock-user-id",
+    created_at: new Date(),
+    name: "Empathetic Bob",
+    rapport: 7,
+    exploration: 7,
+    empathy: 10,
+    speed: 5,
+    image: "/interviewers/Bob.png",
+    description: "Hi! I'm Bob, your go-to empathetic interviewer. I excel at understanding and connecting with people on a deeper level, ensuring every conversation is insightful and meaningful. With a focus on empathy, I'm here to listen and learn from you. Let's create a genuine connection!",
+    audio: "Bob.wav",
+    agent_id: "mock-agent-bob",
+  },
+];
+
 export function InterviewerProvider({ children }: InterviewerProviderProps) {
   const [interviewers, setInterviewers] = useState<Interviewer[]>([]);
-  const { user } = useClerk();
+  const { user } = useAuth();
   const [interviewersLoading, setInterviewersLoading] = useState(true);
 
   const fetchInterviewers = async () => {
     try {
       setInterviewersLoading(true);
-      const response = await InterviewerService.getAllInterviewers(
-        user?.id as string,
+      
+      // Check if we're in development mode and don't have a user
+      const isSupabaseConfigured = Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       );
+
+      if (!isSupabaseConfigured || !user?.id) {
+        console.log('Development mode: Using mock interviewers');
+        setInterviewers(mockInterviewers);
+        setInterviewersLoading(false);
+        return;
+      }
+
+      const response = await InterviewerService.getAllInterviewers(user.id);
       setInterviewers(response);
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching interviewers:', error);
+      // Fallback to mock data on error
+      console.log('Error occurred, falling back to mock interviewers');
+      setInterviewers(mockInterviewers);
+    } finally {
+      setInterviewersLoading(false);
     }
-    setInterviewersLoading(false);
   };
 
   const createInterviewer = async (payload: any) => {
-    await InterviewerService.createInterviewer({ ...payload });
-    fetchInterviewers();
+    try {
+      // Check if we're in development mode
+      const isSupabaseConfigured = Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
+      if (!isSupabaseConfigured || !user?.id) {
+        console.log('Development mode: Cannot create real interviewers');
+        return;
+      }
+
+      await InterviewerService.createInterviewer({ ...payload });
+      fetchInterviewers();
+    } catch (error) {
+      console.error('Error creating interviewer:', error);
+    }
   };
 
   useEffect(() => {
-    if (user?.id) {
-      fetchInterviewers();
-    }
+    fetchInterviewers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -69,9 +130,3 @@ export function InterviewerProvider({ children }: InterviewerProviderProps) {
     </InterviewerContext.Provider>
   );
 }
-
-export const useInterviewers = () => {
-  const value = useContext(InterviewerContext);
-
-  return value;
-};

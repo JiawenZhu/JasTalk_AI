@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { avatars } from "@/components/dashboard/interviewer/avatars";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useInterviewers } from "@/contexts/interviewers.context";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth } from "@/contexts/auth.context";
 
 const createInterviewerCard = () => {
   const [open, setOpen] = useState(false);
@@ -23,7 +23,7 @@ const createInterviewerCard = () => {
   const [speed, setSpeed] = useState(0.9);
   const [image, setImage] = useState("");
   const { createInterviewer } = useInterviewers();
-  const { user } = useClerk();
+  const { user } = useAuth();
   const [isClicked, setIsClicked] = useState(false);
 
   useEffect(() => {

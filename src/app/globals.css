@@ -2,14 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+#gradient-canvas {
+  --gradient-color-1: #bde1ff;
+  --gradient-color-2: #6ca0f4;
+  --gradient-color-3: #e2d8ee;
+  --gradient-color-4: #94c8ff;
+}
+
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+  
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    line-height: 1.6;
+    /* Enable hardware acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    /* Background styling for liftoff design */
+    background-color: #F7F9FC;
+    transition: none;
+    overflow-x: hidden;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -41,6 +73,11 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+
+    /* Liftoff specific colors */
+    --primary-blue: #4F46E5;
+    --primary-dark: #1E2B3A;
+    --background-light: #F7F9FC;
   }
 
   .dark {
@@ -74,16 +111,762 @@
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+/* Liftoff-style animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-  body {
-    @apply bg-background text-foreground;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-.cl-logoImage {
-  width: 100px !important;
-  height: 100px !important;
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Enhanced shimmer effect for skeleton loading */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg, 
+    #f0f0f0 25%, 
+    #e0e0e0 50%, 
+    #f0f0f0 75%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite ease-in-out;
+}
+
+/* Layout stability classes */
+.layout-stable {
+  contain: layout style paint;
+  will-change: auto;
+}
+
+.no-layout-shift {
+  min-height: 1px;
+  min-width: 1px;
+}
+
+/* Navigation and page transition optimizations */
+.navigation-layer {
+  position: relative;
+  min-height: 100vh;
+  /* Enable hardware acceleration for smoother animations */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.navigation-offset {
+  min-height: calc(100vh - 64px);
+}
+
+/* Prevent layout shifts during initial render */
+.content-container {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out;
+}
+
+.content-container.ready {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Smooth page transitions */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out;
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 150ms ease-in-out, transform 150ms ease-in-out;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* Navigation components hardware acceleration */
+.navigation-layer > *,
+.navigation-layer nav,
+.navigation-layer aside {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Prevent content shifting during async loading */
+.async-content {
+  min-height: 200px;
+  position: relative;
+}
+
+.async-content.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Improve rendering performance for route transitions */
+.route-container {
+  isolation: isolate;
+  contain: layout style paint;
+}
+
+/* Loading state improvements */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(247, 249, 252, 0.8);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: opacity 200ms ease-in-out;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Optimized utility classes */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.4s ease-out;
+}
+
+.animate-pulse-fast {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Question selection specific styles */
+.question-selection {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 1024px) {
+  .question-selection {
+    padding: 0;
+  }
+}
+
+/* Card hover effects matching liftoff design */
+.card-hover {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 transition-all duration-200 ease-in-out;
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+  contain: layout style paint;
+  background-color: #ffffff !important;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px) translateZ(0);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Button styles matching liftoff */
+.btn-primary {
+  @apply bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 ease-in-out;
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.btn-primary:hover {
+  @apply bg-blue-700;
+  transform: translateY(-1px) translateZ(0);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 ease-in-out;
+  transform: translateZ(0);
+}
+
+.btn-secondary:hover {
+  @apply bg-gray-200;
+  transform: translateY(-1px) translateZ(0);
+}
+
+/* Interview card styles */
+.interview-card {
+  @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  contain: layout style paint;
+  will-change: transform;
+  transition: transform 200ms ease-in-out, box-shadow 200ms ease-in-out;
+}
+
+.interview-card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* Interviewer card styles */
+.interviewer-card {
+  @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6;
+  contain: layout style paint;
+  will-change: transform;
+  transition: all 200ms ease-in-out;
+}
+
+.interviewer-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.interviewer-card.selected {
+  @apply border-blue-500 bg-blue-50;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+@layer base {
+  /* Better focus states for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500;
+  }
+
+  /* Enhanced touch targets for mobile */
+  @media (hover: none) and (pointer: coarse) {
+    button,
+    a[role="button"],
+    input[type="button"],
+    input[type="submit"] {
+      min-height: 44px;
+      min-width: 44px;
+      touch-action: manipulation;
+    }
+  }
+
+  /* Improved text rendering */
+  h1, h2, h3, h4, h5, h6 {
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.025em;
+    color: var(--primary-dark);
+  }
+
+  /* Better image rendering */
+  img {
+    @apply max-w-full h-auto;
+    height: auto;
+    max-width: 100%;
+    vertical-align: middle;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Dark mode scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    @apply bg-gray-800;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-gray-600;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+/* Mobile-first responsive optimizations */
+@media (max-width: 768px) {
+  /* Reduce animations on mobile for better performance */
+  * {
+    animation-duration: 0.2s !important;
+    transition-duration: 0.2s !important;
+  }
+  
+  .interview-card,
+  .interviewer-card {
+    transform: none !important;
+  }
+
+  .interview-card:hover,
+  .interviewer-card:hover {
+    transform: none !important;
+  }
+
+  /* Better mobile scroll performance */
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+}
+
+/* Background stability for the entire app */
+html, body, main {
+  background-color: #F7F9FC;
+  transition: none !important;
+}
+
+/* Custom gradient backgrounds matching liftoff */
+.gradient-bg-1,
+.gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-bg-2,
+.gradient-secondary {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.gradient-bg-3,
+.gradient-success {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Enhanced loading states */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.dark .skeleton,
+.dark .skeleton-shimmer {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background-size: 1000px 100%;
+}
+
+/* GPU acceleration helpers */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .btn-primary {
+    border: 2px solid currentColor;
+  }
+  
+  .card-hover {
+    border: 2px solid #e5e7eb;
+  }
+  
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #333333 25%, #666666 50%, #333333 75%);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .skeleton-shimmer {
+    animation: none;
+    background: #e5e7eb;
+  }
+}
+
+/* Performance optimizations for large lists */
+.virtual-list {
+  contain: layout style paint;
+  transform: translateZ(0);
+}
+
+.virtual-list-item {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    @apply hidden;
+  }
+
+  body {
+    @apply bg-white text-black;
+  }
+  
+  * {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  .skeleton-shimmer {
+    background: #f3f4f6 !important;
+    animation: none !important;
+  }
+}
+
+/* Custom scrollbar styles */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar for modal content */
+.modal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Ensure proper modal positioning */
+body.modal-open {
+  overflow: hidden;
+}
+
+@media (max-height: 600px) {
+  .modal-content {
+    max-height: calc(100vh - 1rem);
+  }
+}
+
+/* Enhanced modal styles for better content fit */
+.modal-content {
+  min-height: 700px;
+  max-height: 95vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.modal-content.large {
+  min-height: 800px;
+  max-width: 98vw;
+  width: fit-content;
+}
+
+/* Better modal backdrop */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* Modal responsiveness improvements */
+@media (max-width: 1024px) {
+  .modal-content {
+    max-width: 95vw;
+    margin: 0.5rem;
+    min-height: 600px;
+    padding: 1.5rem;
+  }
+  
+  .modal-content.large {
+    min-height: 700px;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 95vw;
+    margin: 1rem;
+    min-height: 600px;
+    padding: 1rem;
+  }
+  
+  .modal-content.large {
+    min-height: 600px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    max-width: 100vw;
+    margin: 0.5rem;
+    min-height: 500px;
+    padding: 0.75rem;
+  }
+  
+  .modal-content.large {
+    min-height: 550px;
+  }
+}
+
+/* Improve modal header spacing */
+.modal-header {
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 2rem;
+}
+
+/* Better form spacing in modals */
+.modal-form-section {
+  margin-bottom: 2rem;
+}
+
+.modal-form-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Interview modal specific improvements */
+.interviewer-selector {
+  min-height: 180px;
+  padding: 1.5rem 0;
+}
+
+.interviewer-item {
+  margin-right: 2rem;
+  flex-shrink: 0;
+}
+
+/* Form controls spacing in modals */
+.modal-form-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-top: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .modal-form-controls {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 3rem;
+  }
+}
+
+/* Modal action buttons */
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+@media (min-width: 1024px) {
+  .modal-actions {
+    flex-direction: row;
+    justify-content: center;
+    gap: 2rem;
+  }
+}
+
+/* Ensure modal content is always visible */
+.modal-scroll-container {
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  padding-right: 0.75rem;
+}
+
+/* Better focus management in modals */
+.modal-content:focus-within {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Animation improvements for larger modals */
+.modal-enter {
+  opacity: 0;
+  transform: scale(0.95) translateY(1rem);
+  transition: all 300ms ease-out;
+}
+
+.modal-enter-active {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.modal-exit {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition: all 250ms ease-in;
+}
+
+.modal-exit-active {
+  opacity: 0;
+  transform: scale(0.95) translateY(-0.5rem);
+}
+
+/* Prevent layout shifts and hydration issues */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Navigation and layout styles */
+.navigation-layer {
+  min-height: 100vh;
+}
+
+.navigation-offset {
+  min-height: calc(100vh - 64px);
+}
+
+/* Smooth page transitions */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease-in-out, transform 200ms ease-in-out;
+}
+
+/* Ensure navigation stays fixed during transitions */
+.navigation-layer > * {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Modal and overlay improvements */
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* Enhanced modal content for better UX */
+.modal-content {
+  min-height: 700px;
+  max-height: 95vh;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar styling */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Responsive modal sizing */
+@media (min-width: 1024px) {
+  .modal-content {
+    min-height: 700px;
+    max-width: 98vw;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    min-height: 600px;
+    max-width: 95vw;
+    margin: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    min-height: 500px;
+    max-width: 100vw;
+    margin: 0.5rem;
+  }
 }

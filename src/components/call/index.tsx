@@ -204,44 +204,92 @@ function Call({ interview }: InterviewProps) {
     };
     setLoading(true);
 
-    const oldUserEmails: string[] = (
-      await ResponseService.getAllEmails(interview.id)
-    ).map((item) => item.email);
-    const OldUser =
-      oldUserEmails.includes(email) ||
-      (interview?.respondents && !interview?.respondents.includes(email));
-
-    if (OldUser) {
-      setIsOldUser(true);
-    } else {
-      const registerCallResponse: registerCallResponseType = await axios.post(
-        "/api/register-call",
-        { dynamic_data: data, interviewer_id: interview?.interviewer_id },
-      );
-      if (registerCallResponse.data.registerCallResponse.access_token) {
-        await webClient
-          .startCall({
-            accessToken:
-              registerCallResponse.data.registerCallResponse.access_token,
-          })
-          .catch(console.error);
-        setIsCalling(true);
-        setIsStarted(true);
-
-        setCallId(registerCallResponse?.data?.registerCallResponse?.call_id);
-
-        const response = await createResponse({
-          interview_id: interview.id,
-          call_id: registerCallResponse.data.registerCallResponse.call_id,
-          email: email,
-          name: name,
-        });
-      } else {
-        console.log("Failed to register call");
+    try {
+      console.log("Starting conversation for interview:", interview.id);
+      
+      // Get old user emails with error handling
+      let oldUserEmails: string[] = [];
+      try {
+        const emailResponse = await ResponseService.getAllEmails(interview.id);
+        oldUserEmails = emailResponse.map((item) => item.email);
+        console.log("Retrieved old user emails:", oldUserEmails);
+      } catch (error) {
+        console.error("Failed to get old user emails:", error);
+        // Continue without old user check in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Continuing without old user email check in development");
+        } else {
+          throw error;
+        }
       }
-    }
 
-    setLoading(false);
+      const OldUser =
+        oldUserEmails.includes(email) ||
+        (interview?.respondents && !interview?.respondents.includes(email));
+
+      if (OldUser) {
+        console.log("User identified as old user");
+        setIsOldUser(true);
+      } else {
+        console.log("Registering new call with data:", data);
+        
+        try {
+          const registerCallResponse: registerCallResponseType = await axios.post(
+            "/api/register-call",
+            { dynamic_data: data, interviewer_id: interview?.interviewer_id },
+          );
+          
+          console.log("Register call response:", registerCallResponse.data);
+          
+          if (registerCallResponse.data.registerCallResponse.access_token) {
+            console.log("Starting web call with access token");
+            
+            await webClient
+              .startCall({
+                accessToken:
+                  registerCallResponse.data.registerCallResponse.access_token,
+              })
+              .catch((error) => {
+                console.error("Error starting web call:", error);
+                throw error;
+              });
+              
+            setIsCalling(true);
+            setIsStarted(true);
+            setCallId(registerCallResponse?.data?.registerCallResponse?.call_id);
+
+            console.log("Creating response record");
+            const response = await createResponse({
+              interview_id: interview.id,
+              call_id: registerCallResponse.data.registerCallResponse.call_id,
+              email: email,
+              name: name,
+            });
+            console.log("Response created:", response);
+          } else {
+            console.error("Failed to register call - no access token received");
+            throw new Error("No access token received from register call");
+          }
+        } catch (error) {
+          console.error("Error during call registration:", error);
+          // Show user-friendly error message
+          if (axios.isAxiosError(error)) {
+            console.error("Axios error details:", {
+              status: error.response?.status,
+              data: error.response?.data,
+              message: error.message
+            });
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error("Error in startConversation:", error);
+      // Handle error gracefully - maybe show a toast or error message
+      // For now, just log it
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -279,9 +327,9 @@ function Call({ interview }: InterviewProps) {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       {isStarted && <TabSwitchWarning />}
       <div className="bg-white rounded-md md:w-[80%] w-[90%]">
-        <Card className="h-[88vh] rounded-lg border-2 border-b-4 border-r-4 border-black text-xl font-bold transition-all  md:block dark:border-white ">
-          <div>
-            <div className="m-4 h-[15px] rounded-lg border-[1px]  border-black">
+        <Card className="h-[88vh] rounded-lg border-2 border-b-4 border-r-4 border-black text-xl font-bold transition-all md:block dark:border-white overflow-hidden">
+          <div className="h-full flex flex-col">
+            <div className="m-4 h-[15px] rounded-lg border-[1px] border-black flex-shrink-0">
               <div
                 className=" bg-indigo-600 h-[15px] rounded-lg"
                 style={{
@@ -295,7 +343,7 @@ function Call({ interview }: InterviewProps) {
                 }}
               />
             </div>
-            <CardHeader className="items-center p-1">
+            <CardHeader className="items-center p-1 flex-shrink-0">
               {!isEnded && (
                 <CardTitle className="flex flex-row items-center text-lg md:text-xl font-bold mb-2">
                   {interview?.name}
@@ -320,107 +368,107 @@ function Call({ interview }: InterviewProps) {
                 </div>
               )}
             </CardHeader>
-            {!isStarted && !isEnded && !isOldUser && (
-              <div className="w-fit min-w-[400px] max-w-[400px] mx-auto mt-2  border border-indigo-200 rounded-md p-2 m-2 bg-slate-50">
-                <div>
-                  {interview?.logo_url && (
-                    <div className="p-1 flex justify-center">
-                      <Image
-                        src={interview?.logo_url}
-                        alt="Logo"
-                        className="h-10 w-auto"
-                        width={100}
-                        height={100}
-                      />
+            <div className="flex-1 min-h-0 flex flex-col">
+              {!isStarted && !isEnded && !isOldUser && (
+                <div className="w-fit min-w-[400px] max-w-[400px] mx-auto mt-2  border border-indigo-200 rounded-md p-2 m-2 bg-slate-50">
+                  <div>
+                    {interview?.logo_url && (
+                      <div className="p-1 flex justify-center">
+                        <Image
+                          src={interview?.logo_url}
+                          alt="Logo"
+                          className="h-10 w-auto"
+                          width={100}
+                          height={100}
+                        />
+                      </div>
+                    )}
+                    <div className="p-2 font-normal text-sm mb-4 whitespace-pre-line">
+                      {interview?.description}
+                      <p className="font-bold text-sm">
+                        {"\n"}Ensure your volume is up and grant microphone access
+                        when prompted. Additionally, please make sure you are in a
+                        quiet environment.
+                        {"\n\n"}Note: Tab switching will be recorded.
+                      </p>
                     </div>
-                  )}
-                  <div className="p-2 font-normal text-sm mb-4 whitespace-pre-line">
-                    {interview?.description}
-                    <p className="font-bold text-sm">
-                      {"\n"}Ensure your volume is up and grant microphone access
-                      when prompted. Additionally, please make sure you are in a
-                      quiet environment.
-                      {"\n\n"}Note: Tab switching will be recorded.
-                    </p>
+                    {!interview?.is_anonymous && (
+                      <div className="flex flex-col gap-2 justify-center">
+                        <div className="flex justify-center">
+                          <input
+                            value={email}
+                            className="h-fit mx-auto py-2 border-2 rounded-md w-[75%] self-center px-2 border-gray-400 text-sm font-normal"
+                            placeholder="Enter your email address"
+                            onChange={(e) => setEmail(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex justify-center">
+                          <input
+                            value={name}
+                            className="h-fit mb-4 mx-auto py-2 border-2 rounded-md w-[75%] self-center px-2 border-gray-400 text-sm font-normal"
+                            placeholder="Enter your first name"
+                            onChange={(e) => setName(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {!interview?.is_anonymous && (
-                    <div className="flex flex-col gap-2 justify-center">
-                      <div className="flex justify-center">
-                        <input
-                          value={email}
-                          className="h-fit mx-auto py-2 border-2 rounded-md w-[75%] self-center px-2 border-gray-400 text-sm font-normal"
-                          placeholder="Enter your email address"
-                          onChange={(e) => setEmail(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex justify-center">
-                        <input
-                          value={name}
-                          className="h-fit mb-4 mx-auto py-2 border-2 rounded-md w-[75%] self-center px-2 border-gray-400 text-sm font-normal"
-                          placeholder="Enter your first name"
-                          onChange={(e) => setName(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="w-[80%] flex flex-row mx-auto justify-center items-center align-middle">
-                  <Button
-                    className="min-w-20 h-10 rounded-lg flex flex-row justify-center mb-8"
-                    style={{
-                      backgroundColor: interview.theme_color ?? "#4F46E5",
-                      color: isLightColor(interview.theme_color ?? "#4F46E5")
-                        ? "black"
-                        : "white",
-                    }}
-                    disabled={
-                      Loading ||
-                      (!interview?.is_anonymous && (!isValidEmail || !name))
-                    }
-                    onClick={startConversation}
-                  >
-                    {!Loading ? "Start Interview" : <MiniLoader />}
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger>
-                      <Button
-                        className="bg-white border ml-2 text-black min-w-15 h-10 rounded-lg flex flex-row justify-center mb-8"
-                        style={{ borderColor: interview.theme_color }}
-                        disabled={Loading}
-                      >
-                        Exit
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-indigo-600 hover:bg-indigo-800"
-                          onClick={async () => {
-                            await onEndCallClick();
-                          }}
+                  <div className="w-[80%] flex flex-row mx-auto justify-center items-center align-middle">
+                    <Button
+                      className="min-w-20 h-10 rounded-lg flex flex-row justify-center mb-8"
+                      style={{
+                        backgroundColor: interview.theme_color ?? "#4F46E5",
+                        color: isLightColor(interview.theme_color ?? "#4F46E5")
+                          ? "black"
+                          : "white",
+                      }}
+                      disabled={
+                        Loading ||
+                        (!interview?.is_anonymous && (!isValidEmail || !name))
+                      }
+                      onClick={startConversation}
+                    >
+                      {!Loading ? "Start Interview" : <MiniLoader />}
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger>
+                        <Button
+                          className="bg-white border ml-2 text-black min-w-15 h-10 rounded-lg flex flex-row justify-center mb-8"
+                          style={{ borderColor: interview.theme_color }}
+                          disabled={Loading}
                         >
-                          Continue
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          Exit
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-indigo-600 hover:bg-indigo-800"
+                            onClick={async () => {
+                              await onEndCallClick();
+                            }}
+                          >
+                            Continue
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
-              </div>
-            )}
-            {isStarted && !isEnded && !isOldUser && (
-              <div className="flex flex-row p-2 grow">
-                <div className="border-x-2 border-grey w-[50%] my-auto min-h-[70%]">
-                  <div className="flex flex-col justify-evenly">
+              )}
+              {isStarted && !isEnded && !isOldUser && (
+                <div className="flex flex-row flex-1 min-h-0">
+                  <div className="border-x-2 border-grey w-[50%] flex flex-col">
                     <div
-                      className={`text-[22px] w-[80%] md:text-[26px] mt-4 min-h-[250px] mx-auto px-6`}
+                      className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
                     >
                       {lastInterviewerResponse}
                     </div>
-                    <div className="flex flex-col mx-auto justify-center items-center align-middle">
+                    <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
                       <Image
                         src={interviewerImg}
                         alt="Image of the interviewer"
@@ -432,37 +480,37 @@ function Call({ interview }: InterviewProps) {
                             : ""
                         }`}
                       />
-                      <div className="font-semibold">Interviewer</div>
+                      <div className="font-semibold mt-2">Interviewer</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col w-[50%]">
+                    <div
+                      ref={lastUserResponseRef}
+                      className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
+                    >
+                      {lastUserResponse}
+                    </div>
+                    <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
+                      <Image
+                        src={`/user-icon.png`}
+                        alt="Picture of the user"
+                        width={120}
+                        height={120}
+                        className={`object-cover object-center mx-auto my-auto ${
+                          activeTurn === "user"
+                            ? `border-4 border-[${interview.theme_color}] rounded-full`
+                            : ""
+                        }`}
+                      />
+                      <div className="font-semibold mt-2">You</div>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex flex-col justify-evenly w-[50%]">
-                  <div
-                    ref={lastUserResponseRef}
-                    className={`text-[22px] w-[80%] md:text-[26px] mt-4 mx-auto h-[250px] px-6 overflow-y-auto`}
-                  >
-                    {lastUserResponse}
-                  </div>
-                  <div className="flex flex-col mx-auto justify-center items-center align-middle">
-                    <Image
-                      src={`/user-icon.png`}
-                      alt="Picture of the user"
-                      width={120}
-                      height={120}
-                      className={`object-cover object-center mx-auto my-auto ${
-                        activeTurn === "user"
-                          ? `border-4 border-[${interview.theme_color}] rounded-full`
-                          : ""
-                      }`}
-                    />
-                    <div className="font-semibold">You</div>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
             {isStarted && !isEnded && !isOldUser && (
-              <div className="items-center p-2">
+              <div className="items-center p-2 flex-shrink-0">
                 <AlertDialog>
                   <AlertDialogTrigger className="w-full">
                     <Button
@@ -496,7 +544,6 @@ function Call({ interview }: InterviewProps) {
                 </AlertDialog>
               </div>
             )}
-
             {isEnded && !isOldUser && (
               <div className="w-fit min-w-[400px] max-w-[400px] mx-auto mt-2  border border-indigo-200 rounded-md p-2 m-2 bg-slate-50  absolute -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
                 <div>

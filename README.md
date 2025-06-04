@@ -2,129 +2,252 @@
 ![License](https://img.shields.io/github/license/foloup/foloup)
 [![Twitter Follow](https://img.shields.io/twitter/follow/SuveenE?style=social)](https://x.com/SuveenE)
 
-# FoloUp - AI-powered voice interviewer for hiring 💼
+# FoloUp - AI-Powered Interview Platform
 
-FoloUp is an open source platform for companies to conduct AI powered hiring interviews with their candidates.
+FoloUp is a modern, open-source platform that empowers companies to conduct sophisticated AI-powered hiring interviews with seamless voice interactions and intelligent analysis.
 
 <img src="https://github.com/user-attachments/assets/fa92ade1-02ea-4332-b5ed-97056dea01c3" alt="FoloUp Logo" width="800">
 
 <div style="display: flex; flex-direction: row; gap: 20px; margin: 20px 0;">
   <picture>
-    <img src="https://github.com/user-attachments/assets/91adf737-6f62-4f48-ae68-58855bc38ccf" alt="Description 1" width="400" style="max-width: 100%;">
+    <img src="https://github.com/user-attachments/assets/91adf737-6f62-4f48-ae68-58855bc38ccf" alt="Interview Dashboard" width="400" style="max-width: 100%;">
   </picture>
   <picture>
-    <img src="https://github.com/user-attachments/assets/91bbe5d5-1eff-4158-80d9-d98c2a53f59b" alt="Description 2" width="400" style="max-width: 100%;">
+    <img src="https://github.com/user-attachments/assets/91bbe5d5-1eff-4158-80d9-d98c2a53f59b" alt="Interview Interface" width="400" style="max-width: 100%;">
   </picture>
 </div>
 
-## Key Features
+## ✨ Key Features
 
-- **🎯 Interview Creation:** Instantly generate tailored interview questions from any job description.
-- **🔗 One-Click Sharing:** Generate and share unique interview links with candidates in seconds.
-- **🎙️ AI Voice Interviews:** Let our AI conduct natural, conversational interviews that adapt to candidate responses.
-- **📊 Smart Analysis:** Get detailed insights and scores for each interview response, powered by advanced AI.
-- **📈 Comprehensive Dashboard:** Track all candidate performances and overall stats.
+### 🎯 **Smart Interview Creation**
+- **AI-Generated Questions:** Instantly create tailored interview questions from job descriptions
+- **Multiple Interviewer Personalities:** Choose from empathetic, explorative, or conversational AI interviewers
+- **Retell AI Integration:** Sync your custom AI agents directly from Retell AI dashboard
 
-Here's a [loom](https://www.loom.com/share/762fd7d12001490bbfdcf3fac37ff173?sid=9a5b2a5a-64df-4c4c-a0e7-fc9765691f81) of me explaining the app.
+### 🎙️ **Advanced Voice Interviews**
+- **Natural Conversations:** AI-powered voice interviews that adapt to candidate responses
+- **Real-time Transcription:** Live transcript display during interviews
+- **Professional UI:** Clean, responsive interview interface with no text cutoff issues
+- **Tab Switch Detection:** Monitor candidate focus during interviews
 
-## Initial Setup
+### 📊 **Intelligent Analysis & Management**
+- **Smart Response Analysis:** AI-powered evaluation of candidate answers
+- **Comprehensive Dashboard:** Track candidate performance and interview statistics
+- **One-Click Sharing:** Generate unique interview links instantly
+- **Multi-organization Support:** Robust user and organization management
 
-1. Clone the project.
+### 🔧 **Enhanced Developer Experience**
+- **Development Mode Support:** Comprehensive fallbacks for local development
+- **Error Handling:** Robust error handling with graceful degradation
+- **Authentication System:** Seamless Supabase authentication with development fallbacks
+- **Real-time Sync:** Automatic synchronization of Retell AI agents
+
+Here's a [demo video](https://www.loom.com/share/762fd7d12001490bbfdcf3fac37ff173?sid=9a5b2a5a-64df-4c4c-a0e7-fc9765691f81) showcasing the platform.
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ and yarn/npm
+- Supabase account
+- Retell AI account
+- OpenAI API key
+
+### 1. Installation
 
 ```bash
 git clone https://github.com/FoloUp/FoloUp.git
+cd FoloUp
+yarn install
 ```
 
-2. Copy the existing environment template file
+### 2. Environment Setup
 
 ```bash
 cp .env.example .env
 ```
 
-## Clerk Setup ([Clerk](https://clerk.com/))
+Configure your `.env` file with the following variables:
 
-We use Clerk for authentication. Set up Clerk environment variables in the `.env` file. Free plan should be more than enough.
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-1. Navigate to [Clerk](https://dashboard.clerk.com/) and create an application following the [setup guide](https://clerk.com/docs/quickstarts/setup-clerk).
+# API Keys
+OPENAI_API_KEY=your_openai_api_key
+RETELL_API_KEY=your_retell_api_key
 
-<img src="https://github.com/user-attachments/assets/faa72830-10b0-4dfd-8f07-792e7520b6a2" alt="Clerk Environment Variables" width="800">
-
-2. Your `.env` (NOT `.env.local`) file should have the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` variables populated with **no inverted commas**
-
-3. Enable organizations in your Clerk application by navigating to the [Organization Settings](https://dashboard.clerk.com/last-active?path=organizations-settings&_gl=1*58xbvk*_gcl_au*MTEzODk3NzAyMy4xNzM4NjQzMzU3*_ga*MzUyMTk4NzIwLjE3Mzg2NDM0NzY.*_ga_1WMF5X234K*MTczODczNzkxOC4zLjEuMTczODczNzkyNi4wLjAuMA..) page.
-
-<img src="https://github.com/user-attachments/assets/381cd138-439a-4b4f-ae87-50414fb1d64b" alt="Clerk Organization Settings" width="800">
-
-4. Make sure you create an organization and invite your email to it.
-
-## Database Setup ([Supabase](https://supabase.com/))
-
-Supabase is used for storing the data. It's really simple to set up and the free plan should suffice.
-
-1. Create a project (Note down your project's password)
-2. Got to SQL Editor and copy the SQL code from `supabase_schema.sql`
-
-<img src="https://github.com/user-attachments/assets/a31c14b8-45ca-417c-8927-aceb36fa5990" alt="Supabase SQL Editor" height="200">
-
-3. Run the SQL code to confirm the tables are created.
-4. Copy the supabase url and anon key from the project settings and paste it in the `.env` file in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-## Retell AI Setup ([Retell AI](https://retell.ai/))
-
-We use Retell AI to manage all the voice calls. They manage storage of recordings and provide a simple SDK to integrate with. They provide free credits to start with and will have to pay as you go.
-
-1. Create an API key from [Retell AI Dashboard](https://dashboard.retellai.com/apiKey) and add it to the `.env` file in `RETELL_API_KEY`
-
-## Add OpenAI API Key
-
-We use OpenAI to generate questions for interviews and analyze responses. This would not be that costly.
-
-1. Go to [OpenAI](https://platform.openai.com/api-keys) and create an API key
-2. Add the API key to the `.env` file in `OPENAI_API_KEY`
-
-## Getting Started locally
-
-First install the packages:
-
-```bash
-yarn
+# Application URL
+NEXT_PUBLIC_LIVE_URL=http://localhost:3000
 ```
 
-Run the development server:
+### 3. Database Setup
+
+1. Create a new [Supabase](https://supabase.com/) project
+2. Navigate to SQL Editor
+3. Copy and execute the schema from `supabase_schema.sql`
+4. Add your Supabase URL and anon key to `.env`
+
+### 4. Retell AI Setup
+
+1. Create an account at [Retell AI](https://retell.ai/)
+2. Create AI agents in your dashboard (organize them in an "Interview" folder)
+3. Get your API key from [Retell Dashboard](https://dashboard.retellai.com/apiKey)
+4. Add the API key to your `.env` file
+
+### 5. OpenAI Setup
+
+1. Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Add it to your `.env` file as `OPENAI_API_KEY`
+
+### 6. Start Development
 
 ```bash
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to see your application running!
 
-## Self Hosting
+## 🎨 Recent Improvements
 
-We recommend using [Vercel](https://vercel.com/) to host the app.
+### Authentication & Database Enhancements
+- ✅ **Fixed Supabase RLS Issues:** Comprehensive error handling for Row Level Security policies
+- ✅ **Development Mode Support:** Automatic fallbacks when authentication is unavailable
+- ✅ **Context Synchronization:** Proper loading coordination between auth, organization, and interviews contexts
+- ✅ **Server-side API Support:** Robust server-side Supabase client for API routes
 
-## Contributing
+### User Interface Improvements
+- ✅ **Fixed Text Cutoff:** Resolved interview question display issues with proper flexbox layout
+- ✅ **Responsive Design:** Improved mobile and desktop layouts
+- ✅ **Loading States:** Enhanced user experience with proper loading indicators
+- ✅ **Error Feedback:** Clear error messages and success notifications
 
-If you'd like to contribute to FoloUp, feel free to fork the repository, make your changes, and submit a pull request. Contributions are welcomed and appreciated.
+### Retell AI Integration
+- ✅ **Agent Sync Functionality:** One-click sync of Retell AI agents to your database
+- ✅ **Avatar Mapping:** Automatic assignment of appropriate avatar images to agents
+- ✅ **Smart Filtering:** Intelligent detection of interview-relevant agents
+- ✅ **Duplicate Prevention:** Avoid syncing agents that already exist
 
-For a detailed guide on contributing, read the [CONTRIBUTING.md](CONTRIBUTING.md) file.
+## 🛠️ Tech Stack
 
-## Show Your Support 🌟
+- **Frontend:** Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend:** Next.js API Routes, Supabase
+- **Database:** PostgreSQL (via Supabase)
+- **Authentication:** Supabase Auth
+- **Voice AI:** Retell AI SDK
+- **Text AI:** OpenAI GPT models
+- **UI Components:** Custom components with Radix UI primitives
 
-If you find FoloUp helpful, please consider giving us a star on GitHub! It helps us reach more developers and continue improving the project.
+## 📁 Project Structure
 
-## Products built on top of FoloUp 🚀
+```
+FoloUp/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── (client)/          # Client-side routes
+│   │   ├── (user)/            # User-facing routes
+│   │   └── api/               # API endpoints
+│   ├── components/            # Reusable UI components
+│   │   ├── call/             # Interview interface components
+│   │   ├── dashboard/        # Dashboard components
+│   │   └── ui/               # Base UI components
+│   ├── contexts/             # React contexts for state management
+│   ├── lib/                  # Utility functions and configurations
+│   └── services/             # External service integrations
+├── public/                   # Static assets
+│   └── interviewers/        # Avatar images
+└── supabase_schema.sql      # Database schema
+```
+
+## 🔧 Development Features
+
+### Sync Retell AI Agents
+Navigate to **Dashboard → Interviewers** and click **"Sync Retell Agents"** to automatically:
+- Fetch all agents from your Retell AI account
+- Filter interview-relevant agents
+- Assign appropriate avatars and descriptions
+- Add new agents to your database
+- Skip existing agents to prevent duplicates
+
+### Development Mode Support
+The application includes comprehensive development fallbacks:
+- **Mock API Responses:** When Retell API is unavailable
+- **Authentication Fallbacks:** Test users for local development
+- **Database Fallbacks:** Mock data when RLS policies block access
+- **Error Recovery:** Graceful degradation with helpful error messages
+
+## 🚀 Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Import your repository in [Vercel](https://vercel.com/)
+3. Add environment variables in Vercel dashboard
+4. Deploy automatically on every push
+
+### Other Platforms
+
+The application can be deployed on any platform that supports Next.js:
+- Netlify
+- Railway
+- DigitalOcean App Platform
+- AWS Amplify
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how to get started:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature-name`
+3. Make your changes and add tests if applicable
+4. Commit your changes: `git commit -m 'Add some feature'`
+5. Push to the branch: `git push origin feature/your-feature-name`
+6. Submit a pull request
+
+For detailed contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Interview not loading:**
+- Check that your Retell API key is valid
+- Ensure agents are properly synced
+- Verify Supabase connection
+
+**Authentication errors:**
+- Confirm Supabase URL and anon key are correct
+- Check RLS policies in Supabase dashboard
+- Try development mode fallbacks
+
+**Agent sync issues:**
+- Verify Retell API key has proper permissions
+- Check console for detailed error messages
+- Ensure agents exist in your Retell dashboard
+
+## 🌟 Show Your Support
+
+If FoloUp helps streamline your hiring process, please ⭐ star this repository! It helps us reach more developers and continue improving the platform.
+
+## 🏢 Products Built with FoloUp
 
 <div align="left">
   <a href="https://talvin.ai/" target="_blank">
     <img src="https://pbs.twimg.com/profile_images/1910041959508422656/OEnXp-kO_400x400.jpg" alt="Talvin AI Logo" height="100" style="border-radius: 20%;">
-    <p>Talvin AI</p>
+    <p><strong>Talvin AI</strong> - Advanced AI recruiting platform</p>
   </a>
 </div>
 
-## Contact
+## 📞 Support & Contact
 
-If you have any questions or feedback, please feel free to reach out to us at [suveen.te1[at]gmail.com](mailto:suveen.te1@gmail.com).
+- **Issues:** [GitHub Issues](https://github.com/FoloUp/FoloUp/issues)
+- **Email:** [suveen.te1@gmail.com](mailto:suveen.te1@gmail.com)
+- **Twitter:** [@SuveenE](https://x.com/SuveenE)
 
-## License
+## 📄 License
 
-The software code is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**Built with ❤️ by the FoloUp team**

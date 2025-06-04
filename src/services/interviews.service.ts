@@ -1,6 +1,9 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClientComponentClient();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const getAllInterviews = async (userId: string, organizationId: string) => {
   try {
@@ -77,13 +80,26 @@ const getAllRespondents = async (interviewId: string) => {
 };
 
 const createInterview = async (payload: any) => {
+  console.log('Creating interview with payload:', payload);
+  
+  // Validate required fields
+  if (!payload.organization_id) {
+    console.error('Error: Missing organization_id');
+    throw new Error('Missing organization_id');
+  }
+  
+  if (!payload.user_id) {
+    console.error('Error: Missing user_id');
+    throw new Error('Missing user_id');
+  }
+
   const { error, data } = await supabase
     .from("interview")
     .insert({ ...payload });
+    
   if (error) {
-    console.log(error);
-
-    return [];
+    console.error('Database error creating interview:', error);
+    throw error;
   }
 
   return data;

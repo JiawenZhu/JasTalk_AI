@@ -1,3 +1,6 @@
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Create enum type for plan
 CREATE TYPE plan AS ENUM ('free', 'pro', 'free_trial_over');
 
@@ -7,8 +10,8 @@ CREATE TABLE organization (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
     name TEXT,
     image_url TEXT,
-    allowed_responses_count INTEGER,
-    plan plan
+    allowed_responses_count INTEGER DEFAULT 10,
+    plan plan DEFAULT 'free'
 );
 
 CREATE TABLE "user" (
@@ -82,3 +85,66 @@ CREATE TABLE feedback (
     feedback TEXT,
     satisfaction INTEGER
 );
+
+-- Enable RLS but with proper policies
+ALTER TABLE "user" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview ENABLE ROW LEVEL SECURITY;
+ALTER TABLE response ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviewer ENABLE ROW LEVEL SECURITY;
+
+-- User policies - allow authenticated users to manage their own data
+CREATE POLICY "Users can manage own data" ON "user"
+    FOR ALL USING (auth.uid()::text = id);
+
+-- Organization policies - allow authenticated users to create and manage organizations
+CREATE POLICY "Authenticated users can create organizations" ON organization
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can view organizations they belong to" ON organization
+    FOR SELECT USING (
+        auth.uid()::text IN (
+            SELECT id FROM "user" WHERE organization_id = organization.id
+        )
+    );
+
+CREATE POLICY "Users can update their organization" ON organization
+    FOR UPDATE USING (
+        auth.uid()::text IN (
+            SELECT id FROM "user" WHERE organization_id = organization.id
+        )
+    );
+
+-- Interview policies
+CREATE POLICY "Users can manage interviews in their organization" ON interview
+    FOR ALL USING (
+        organization_id IN (
+            SELECT organization_id FROM "user" WHERE id = auth.uid()::text
+        )
+    );
+
+-- Response policies - allow public access for interview responses
+CREATE POLICY "Public can create responses" ON response
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can view responses for their interviews" ON response
+    FOR SELECT USING (
+        interview_id IN (
+            SELECT id FROM interview WHERE organization_id IN (
+                SELECT organization_id FROM "user" WHERE id = auth.uid()::text
+            )
+        )
+    );
+
+CREATE POLICY "Users can update responses for their interviews" ON response
+    FOR UPDATE USING (
+        interview_id IN (
+            SELECT id FROM interview WHERE organization_id IN (
+                SELECT organization_id FROM "user" WHERE id = auth.uid()::text
+            )
+        )
+    );
+
+-- Interviewer policies - allow users to create and manage interviewers
+CREATE POLICY "Authenticated users can manage interviewers" ON interviewer
+    FOR ALL USING (auth.role() = 'authenticated');

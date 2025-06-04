@@ -3,7 +3,8 @@
 import React, { useState, useContext, ReactNode, useEffect } from "react";
 import { Interview } from "@/types/interview";
 import { InterviewService } from "@/services/interviews.service";
-import { useClerk, useOrganization } from "@clerk/nextjs";
+import { useAuth } from "@/contexts/auth.context";
+import { useOrganization } from "@/contexts/organization.context";
 
 interface InterviewContextProps {
   interviews: Interview[];
@@ -14,14 +15,16 @@ interface InterviewContextProps {
   fetchInterviews: () => void;
 }
 
-export const InterviewContext = React.createContext<InterviewContextProps>({
+const InterviewContext = React.createContext<InterviewContextProps>({
   interviews: [],
   setInterviews: () => {},
-  getInterviewById: () => null,
-  setInterviewsLoading: () => undefined,
+  getInterviewById: () => {},
   interviewsLoading: false,
+  setInterviewsLoading: () => {},
   fetchInterviews: () => {},
 });
+
+export const useInterviews = () => useContext(InterviewContext);
 
 interface InterviewProviderProps {
   children: ReactNode;
@@ -29,37 +32,48 @@ interface InterviewProviderProps {
 
 export function InterviewProvider({ children }: InterviewProviderProps) {
   const [interviews, setInterviews] = useState<Interview[]>([]);
-  const { user } = useClerk();
-  const { organization } = useOrganization();
+  const { user, loading: authLoading } = useAuth();
+  const { organization, loading: orgLoading } = useOrganization();
   const [interviewsLoading, setInterviewsLoading] = useState(false);
 
   const fetchInterviews = async () => {
+    // Don't fetch if auth or organization are still loading
+    if (authLoading || orgLoading) {
+      return;
+    }
+
+    // Don't fetch if we don't have both user and organization
+    if (!user?.id || !organization?.id) {
+      return;
+    }
+
     try {
       setInterviewsLoading(true);
       const response = await InterviewService.getAllInterviews(
-        user?.id as string,
-        organization?.id as string,
+        user.id,
+        organization.id,
       );
-      setInterviewsLoading(false);
-      setInterviews(response);
+      
+      setInterviews(response || []);
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching interviews:', error);
+      setInterviews([]);
+    } finally {
+      setInterviewsLoading(false);
     }
-    setInterviewsLoading(false);
   };
 
   const getInterviewById = async (interviewId: string) => {
     const response = await InterviewService.getInterviewById(interviewId);
-
     return response;
   };
 
   useEffect(() => {
-    if (organization?.id || user?.id) {
+    // Only fetch when both contexts are loaded and we have the required data
+    if (!authLoading && !orgLoading && user?.id && organization?.id) {
       fetchInterviews();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, user?.id]);
+  }, [user?.id, organization?.id, authLoading, orgLoading]);
 
   return (
     <InterviewContext.Provider
@@ -76,9 +90,3 @@ export function InterviewProvider({ children }: InterviewProviderProps) {
     </InterviewContext.Provider>
   );
 }
-
-export const useInterviews = () => {
-  const value = useContext(InterviewContext);
-
-  return value;
-};
