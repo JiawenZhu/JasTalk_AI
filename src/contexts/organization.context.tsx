@@ -28,20 +28,23 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) {
       setOrganization(null);
       setLoading(false);
-      return;
+      
+return;
     }
 
     // For development, use the same organization ID that the interviews are using
     if (process.env.NODE_ENV === 'development' && user.id === 'test-user-123') {
-      const defaultOrg = {
+      const defaultOrg: Organization = {
         id: 'test-org-123',
         name: 'Test Organization',
+        user_id: user.id,
         image_url: '',
         plan: 'free'
       };
       setOrganization(defaultOrg);
       setLoading(false);
-      return;
+      
+return;
     }
 
     try {
@@ -54,15 +57,17 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
       if (userError || !userData?.organization_id) {
         // For development, create a default organization if none exists
-        const defaultOrg = {
+        const defaultOrg: Organization = {
           id: 'dev-org-123',
           name: 'Development Organization',
+          user_id: user.id,
           image_url: '',
           plan: 'free'
         };
         setOrganization(defaultOrg);
         setLoading(false);
-        return;
+        
+return;
       }
 
       // Now get the organization using the organization_id
@@ -75,9 +80,10 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       if (orgError) {
         console.error('Error fetching organization:', orgError);
         // For development, create a default organization if none exists
-        const defaultOrg = {
+        const defaultOrg: Organization = {
           id: 'dev-org-123',
           name: 'Development Organization',
+          user_id: user.id,
           image_url: '',
           plan: 'free'
         };
@@ -94,7 +100,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted) {return;}
 
     if (user) {
       fetchUserOrganization();
@@ -135,5 +141,6 @@ export function useOrganization() {
   if (context === undefined) {
     throw new Error('useOrganization must be used within an OrganizationProvider');
   }
-  return context;
+  
+return context;
 } 

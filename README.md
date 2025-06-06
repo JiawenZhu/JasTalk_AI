@@ -1,12 +1,12 @@
-[![GitHub stars](https://img.shields.io/github/stars/FoloUp/FoloUp?style=social)](https://github.com/FoloUp/FoloUp/stargazers)
-![License](https://img.shields.io/github/license/foloup/foloup)
+[![GitHub stars](https://img.shields.io/github/stars/JiawenZhu/Roundly.AI?style=social)](https://github.com/JiawenZhu/Roundly.AI/stargazers)
+![License](https://img.shields.io/github/license/JiawenZhu/Roundly.AI)
 [![Twitter Follow](https://img.shields.io/twitter/follow/SuveenE?style=social)](https://x.com/SuveenE)
 
-# FoloUp - AI-Powered Interview Platform
+# Roundly.AI - AI-Powered Interview Platform
 
-FoloUp is a modern, open-source platform that empowers companies to conduct sophisticated AI-powered hiring interviews with seamless voice interactions and intelligent analysis.
+Roundly.AI is a modern, open-source platform that empowers companies to conduct sophisticated AI-powered hiring interviews with seamless voice interactions, intelligent code analysis, and real-time feedback.
 
-<img src="https://github.com/user-attachments/assets/fa92ade1-02ea-4332-b5ed-97056dea01c3" alt="FoloUp Logo" width="800">
+<img src="https://github.com/user-attachments/assets/fa92ade1-02ea-4332-b5ed-97056dea01c3" alt="Roundly.AI Logo" width="800">
 
 <div style="display: flex; flex-direction: row; gap: 20px; margin: 20px 0;">
   <picture>
@@ -30,8 +30,16 @@ FoloUp is a modern, open-source platform that empowers companies to conduct soph
 - **Professional UI:** Clean, responsive interview interface with no text cutoff issues
 - **Tab Switch Detection:** Monitor candidate focus during interviews
 
+### 💻 **Voice-Enabled Coding Interviews**
+- **Live Code Review:** AI analyzes submitted code and provides voice feedback in real-time
+- **Monaco Editor Integration:** Professional coding environment with syntax highlighting
+- **Automatic Analysis:** AI automatically reviews code when executed or submitted
+- **Dynamic Variables:** Real-time code sharing with Retell AI agents via dynamic variables
+- **Multiple Languages:** Support for JavaScript, Python, Java, and more
+
 ### 📊 **Intelligent Analysis & Management**
 - **Smart Response Analysis:** AI-powered evaluation of candidate answers
+- **Code Quality Assessment:** Automated analysis of algorithm complexity and best practices
 - **Comprehensive Dashboard:** Track candidate performance and interview statistics
 - **One-Click Sharing:** Generate unique interview links instantly
 - **Multi-organization Support:** Robust user and organization management
@@ -55,8 +63,8 @@ Here's a [demo video](https://www.loom.com/share/762fd7d12001490bbfdcf3fac37ff17
 ### 1. Installation
 
 ```bash
-git clone https://github.com/FoloUp/FoloUp.git
-cd FoloUp
+git clone https://github.com/JiawenZhu/Roundly.AI.git
+cd Roundly.AI
 yarn install
 ```
 
@@ -110,6 +118,13 @@ Visit [http://localhost:3000](http://localhost:3000) to see your application run
 
 ## 🎨 Recent Improvements
 
+### Voice-Enabled Coding Interviews ✨
+- ✅ **Real-time Code Analysis:** AI automatically analyzes code submissions and provides voice feedback
+- ✅ **Dynamic Variables Integration:** Seamless code sharing with Retell AI agents during live calls
+- ✅ **Monaco Editor:** Professional coding environment with syntax highlighting and autocomplete
+- ✅ **Automatic Triggers:** AI analysis triggers automatically on code execution and submission
+- ✅ **Multi-language Support:** JavaScript, Python, Java, and more programming languages
+
 ### Authentication & Database Enhancements
 - ✅ **Fixed Supabase RLS Issues:** Comprehensive error handling for Row Level Security policies
 - ✅ **Development Mode Support:** Automatic fallbacks when authentication is unavailable
@@ -136,12 +151,13 @@ Visit [http://localhost:3000](http://localhost:3000) to see your application run
 - **Authentication:** Supabase Auth
 - **Voice AI:** Retell AI SDK
 - **Text AI:** OpenAI GPT models
+- **Code Editor:** Monaco Editor
 - **UI Components:** Custom components with Radix UI primitives
 
 ## 📁 Project Structure
 
 ```
-FoloUp/
+Roundly.AI/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── (client)/          # Client-side routes
@@ -149,6 +165,7 @@ FoloUp/
 │   │   └── api/               # API endpoints
 │   ├── components/            # Reusable UI components
 │   │   ├── call/             # Interview interface components
+│   │   ├── coding/           # Coding interview components
 │   │   ├── dashboard/        # Dashboard components
 │   │   └── ui/               # Base UI components
 │   ├── contexts/             # React contexts for state management
@@ -227,9 +244,9 @@ For detailed contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 🌟 Show Your Support
 
-If FoloUp helps streamline your hiring process, please ⭐ star this repository! It helps us reach more developers and continue improving the platform.
+If Roundly.AI helps streamline your hiring process, please ⭐ star this repository! It helps us reach more developers and continue improving the platform.
 
-## 🏢 Products Built with FoloUp
+## 🏢 Products Built with Roundly.AI
 
 <div align="left">
   <a href="https://talvin.ai/" target="_blank">
@@ -240,7 +257,7 @@ If FoloUp helps streamline your hiring process, please ⭐ star this repository!
 
 ## 📞 Support & Contact
 
-- **Issues:** [GitHub Issues](https://github.com/FoloUp/FoloUp/issues)
+- **Issues:** [GitHub Issues](https://github.com/JiawenZhu/Roundly.AI/issues)
 - **Email:** [suveen.te1@gmail.com](mailto:suveen.te1@gmail.com)
 - **Twitter:** [@SuveenE](https://x.com/SuveenE)
 
@@ -250,4 +267,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Built with ❤️ by the FoloUp team**
+**Built with ❤️ by the Roundly.AI team**

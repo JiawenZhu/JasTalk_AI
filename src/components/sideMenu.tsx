@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { PlayCircle, Users } from "lucide-react";
+import { PlayCircle, Users, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
 function SideMenu() {
@@ -84,6 +84,24 @@ function SideMenu() {
               style={{ transform: navigating ? 'scale(0.95)' : 'scale(1)' }}
             />
             <span className="font-medium">Interviewers</span>
+          </button>
+          <button
+            className={`flex flex-row items-center p-3 rounded-md hover:bg-slate-200 cursor-pointer transition-all duration-200 text-left w-full ${
+              pathname.endsWith("/admin")
+                ? "bg-indigo-200 shadow-sm"
+                : "bg-slate-100"
+            } ${navigating ? "opacity-75" : "opacity-100"}`}
+            disabled={navigating}
+            aria-label="Navigate to Admin"
+            aria-current={pathname.endsWith("/admin") ? "page" : undefined}
+            onClick={() => handleNavigation("/dashboard/admin")}
+          >
+            <Settings 
+              className="font-thin mr-2 transition-transform duration-200" 
+              size={20}
+              style={{ transform: navigating ? 'scale(0.95)' : 'scale(1)' }}
+            />
+            <span className="font-medium">Admin</span>
           </button>
         </div>
       </nav>

@@ -15,7 +15,9 @@ export async function POST(req: Request, res: Response) {
     console.log("Request body:", body);
 
     const payload = body.interviewData;
+    const codingQuestions = body.codingQuestions || []; // Extract coding questions if provided
     console.log("Interview payload:", payload);
+    console.log("Coding questions:", codingQuestions);
 
     let readableSlug = null;
     if (body.organizationName) {
@@ -39,8 +41,13 @@ export async function POST(req: Request, res: Response) {
 
     logger.info("Interview created successfully");
 
+    // Return the interview object so frontend can use it for linking coding questions
     return NextResponse.json(
-      { response: "Interview created successfully" },
+      { 
+        response: "Interview created successfully", 
+        interview: newInterview,
+        codingQuestions: codingQuestions // Echo back for frontend reference
+      },
       { status: 200 },
     );
   } catch (err) {

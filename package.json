@@ -1,7 +1,23 @@
 {
-  "name": "foloup-app",
+  "name": "roundly-ai",
   "version": "0.1.0",
   "private": true,
+  "description": "AI-powered voice interviewer platform for hiring with real-time code analysis",
+  "homepage": "https://github.com/JiawenZhu/Roundly.AI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JiawenZhu/Roundly.AI.git"
+  },
+  "keywords": [
+    "ai",
+    "interview",
+    "voice",
+    "hiring",
+    "retell-ai",
+    "code-analysis",
+    "nextjs",
+    "supabase"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",

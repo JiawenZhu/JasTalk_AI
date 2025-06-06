@@ -12,6 +12,7 @@ interface CodingEnvironmentProps {
   interviewId?: string;
   onSubmit?: (code: string, language: string) => void;
   onExecute?: (code: string, language: string) => Promise<ExecutionResult>;
+  onCodeChange?: (code: string, language: string) => void;
   className?: string;
 }
 
@@ -38,10 +39,32 @@ export default function CodingEnvironment({
   interviewId,
   onSubmit,
   onExecute,
+  onCodeChange,
   className = ''
 }: CodingEnvironmentProps) {
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
+
+  // Handle code changes and notify parent
+  const handleCodeChange = (newCode: string) => {
+    console.log('Code change detected:', { 
+      newCodeLength: newCode.length, 
+      language,
+      hasOnCodeChangeCallback: !!onCodeChange 
+    });
+    setCode(newCode);
+    if (onCodeChange) {
+      onCodeChange(newCode, language);
+    }
+  };
+
+  // Handle language changes and notify parent
+  const handleLanguageChange = (newLanguage: string) => {
+    setLanguage(newLanguage);
+    if (onCodeChange) {
+      onCodeChange(code, newLanguage);
+    }
+  };
   const [isExecuting, setIsExecuting] = useState(false);
   const [consoleMessages, setConsoleMessages] = useState<ConsoleMessage[]>([]);
   const [layout, setLayout] = useState<'desktop' | 'mobile'>('desktop');
@@ -80,7 +103,8 @@ public class Solution {
 }`
     };
     
-    setCode(templates[language as keyof typeof templates] || '');
+    const newCode = templates[language as keyof typeof templates] || '';
+    setCode(newCode);
   }, [language]);
 
   // Handle responsive layout
@@ -204,14 +228,22 @@ public class Solution {
       return;
     }
 
+    console.log('CodingEnvironment handleSubmit called', {
+      codeLength: code.length,
+      language,
+      hasOnSubmitCallback: !!onSubmit
+    });
+
     addConsoleMessage({
       type: 'info',
       content: 'Submitting solution for evaluation...'
     });
 
     if (onSubmit) {
+      console.log('Calling parent onSubmit with code:', code.substring(0, 50) + '...');
       onSubmit(code, language);
     } else {
+      console.log('No onSubmit callback provided, using mock submission');
       // Mock submission
       setTimeout(() => {
         addConsoleMessage({
@@ -254,7 +286,8 @@ public class Solution {
 }`
     };
     
-    setCode(templates[language as keyof typeof templates] || '');
+    const newCode = templates[language as keyof typeof templates] || '';
+    handleCodeChange(newCode);
     clearConsole();
     addConsoleMessage({
       type: 'info',
@@ -299,8 +332,8 @@ public class Solution {
               <CodeEditor
                 language={language}
                 value={code}
-                onChange={(value) => setCode(value || '')}
-                onLanguageChange={setLanguage}
+                onChange={(value) => handleCodeChange(value || '')}
+                onLanguageChange={handleLanguageChange}
                 className="flex-1"
               />
               
@@ -410,8 +443,8 @@ public class Solution {
                 <CodeEditor
                   language={language}
                   value={code}
-                  onChange={(value) => setCode(value || '')}
-                  onLanguageChange={setLanguage}
+                  onChange={(value) => handleCodeChange(value || '')}
+                  onLanguageChange={handleLanguageChange}
                 />
               </Panel>
               

@@ -126,7 +126,7 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("Error in register-call API:", error);
-    logger.error("Error registering call:", error);
+    logger.error("Error registering call:", error instanceof Error ? error.message : String(error));
     
     return NextResponse.json(
       { 

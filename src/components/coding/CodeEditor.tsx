@@ -150,6 +150,8 @@ export default function CodeEditor({
     editorRef.current = editor;
     setIsEditorReady(true);
 
+    console.log('Monaco editor mounted. ReadOnly status:', readOnly);
+
     // Enhanced editor options
     editor.updateOptions({
       fontSize: 14,
@@ -163,7 +165,7 @@ export default function CodeEditor({
       renderLineHighlight: 'all',
       selectOnLineNumbers: true,
       roundedSelection: false,
-      readOnly,
+      readOnly: false, // Force readOnly to false for debugging
       cursorStyle: 'line',
       mouseWheelZoom: true,
       quickSuggestions: {
@@ -172,6 +174,11 @@ export default function CodeEditor({
         strings: true
       }
     });
+
+    // Focus the editor to ensure it's ready for input
+    setTimeout(() => {
+      editor.focus();
+    }, 100);
 
     // Add custom key bindings for code execution
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
@@ -282,7 +289,7 @@ export default function CodeEditor({
             renderLineHighlight: 'all',
             selectOnLineNumbers: true,
             roundedSelection: false,
-            readOnly,
+            readOnly: false, // Force readOnly to false for debugging
             cursorStyle: 'line',
             mouseWheelZoom: true,
             padding: { top: 16, bottom: 16 },

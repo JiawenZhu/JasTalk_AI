@@ -57,12 +57,12 @@ const UpgradeModalContent = memo(() => (
           <Image
             src="/premium-plan-icon.png"
             alt="Premium Plan"
-            fill
             className="object-contain"
             sizes="(max-width: 768px) 150px, 299px"
             priority={false}
             placeholder="blur"
             blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyLliDGhQpqRXrZZbKWEhYAQCm4xdVG4U4wKN2kR9rA5b/9k="
+            fill
           />
         </div>
       </div>
@@ -134,25 +134,50 @@ function Interviews() {
       const timer = setTimeout(() => {
         setContentReady(true);
       }, 100);
-      return () => clearTimeout(timer);
+      
+return () => clearTimeout(timer);
     }
   }, [interviewsLoading]);
 
   // Memoized onboarding check
   const checkOnboarding = useCallback(() => {
+    // Multiple checks to determine if this is a first-time user
     const hasSeenOnboarding = localStorage.getItem('foloup-onboarding-completed');
-    if (!hasSeenOnboarding && user && !interviewsLoading) {
+    const hasExistingInterviews = interviews && interviews.length > 0;
+    const lastLoginTime = localStorage.getItem('foloup-last-login');
+    const currentTime = Date.now();
+    
+    // Check if user has been active recently (within last 7 days)
+    const isRecentUser = lastLoginTime && 
+      (currentTime - parseInt(lastLoginTime)) < (7 * 24 * 60 * 60 * 1000);
+    
+    // Set current login time
+    localStorage.setItem('foloup-last-login', currentTime.toString());
+    
+    // Only show onboarding if:
+    // 1. Haven't seen onboarding before AND
+    // 2. Have no existing interviews AND 
+    // 3. Not a recent user AND
+    // 4. User is loaded and interviews are loaded
+    const shouldShowOnboarding = !hasSeenOnboarding && 
+                                !hasExistingInterviews && 
+                                !isRecentUser && 
+                                user && 
+                                !interviewsLoading;
+    
+    if (shouldShowOnboarding) {
       // Show welcome modal after a short delay for better UX
       const timer = setTimeout(() => {
         setShowWelcomeModal(true);
       }, 1000);
-      return () => clearTimeout(timer);
+      
+return () => clearTimeout(timer);
     }
-  }, [user, interviewsLoading]);
+  }, [user, interviewsLoading, interviews]);
 
   // Memoized organization data fetch
   const fetchOrganizationData = useCallback(async () => {
-    if (!organization?.id) return;
+    if (!organization?.id) {return;}
     
     try {
       const data = await ClientService.getOrganizationById(organization.id);
@@ -231,9 +256,15 @@ function Interviews() {
         name={item.name}
         url={item.url ?? ""}
         readableSlug={item.readable_slug}
+        hasCodingQuestions={item.has_coding_questions}
+        codingQuestionCount={item.coding_question_count}
+        showDeleteButton={true}
+        onDeleted={(deletedId) => {
+          fetchInterviews();
+        }}
       />
     ));
-  }, [interviews]);
+  }, [interviews, fetchInterviews]);
 
   return (
     <main className={`dashboard-container p-8 pt-0 ml-12 mr-auto rounded-md route-container transition-all duration-200 ${
@@ -284,8 +315,8 @@ function Interviews() {
       {/* Welcome Modal */}
       <WelcomeModal 
         isOpen={showWelcomeModal} 
-        onClose={handleWelcomeModalClose}
         userName={user?.email}
+        onClose={handleWelcomeModalClose}
       />
     </main>
   );

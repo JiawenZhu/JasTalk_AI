@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  ArrowUpRightSquareIcon,
-  AlarmClockIcon,
-  XCircleIcon,
-  CheckCircleIcon,
-} from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
-import { Card, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
+import { Card, CardHeader, CardTitle } from "../ui/card";
 import { useResponses } from "@/contexts/responses.context";
 import Image from "next/image";
 import axios from "axios";
@@ -37,6 +31,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { InterviewerService } from "@/services/interviewers.service";
+import { CodingQuestionsService } from "@/services/coding-questions.service";
+import { CodingQuestion } from "@/types/interview";
+import CodingEnvironment from "@/components/coding/CodingEnvironment";
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Mic, MicOff, PhoneOff, Volume2, VolumeX, MessageSquare, Code2, ChevronLeft, ChevronRight, AlarmClockIcon, XCircleIcon, CheckCircleIcon, ArrowUpRight } from 'lucide-react';
+import { CodingProblem } from '@/components/coding/ProblemStatement';
 
 const webClient = new RetellWebClient();
 
@@ -56,6 +57,28 @@ type registerCallResponseType = {
 type transcriptType = {
   role: string;
   content: string;
+};
+
+// Convert CodingQuestion to CodingProblem format
+const convertToCodingProblem = (question: CodingQuestion): CodingProblem => {
+  return {
+    id: question.id,
+    title: question.title,
+    difficulty: question.difficulty,
+    description: question.description,
+    examples: question.examples || [],
+    constraints: question.constraints || [],
+    testCases: (question.test_cases || []).map((tc, index) => ({
+      id: `test-${index}`,
+      input: tc.input,
+      expectedOutput: tc.expected_output,
+      explanation: undefined,
+      isHidden: tc.is_hidden
+    })),
+    hints: question.hints || [],
+    timeLimit: question.time_limit,
+    memoryLimit: question.memory_limit
+  };
 };
 
 function Call({ interview }: InterviewProps) {
@@ -82,7 +105,33 @@ function Call({ interview }: InterviewProps) {
   const [time, setTime] = useState(0);
   const [currentTimeDuration, setCurrentTimeDuration] = useState<string>("0");
 
+  // NEW: Coding Environment State
+  const [activeTab, setActiveTab] = useState<'conversation' | 'coding'>('conversation');
+  const [codingQuestions, setCodingQuestions] = useState<CodingQuestion[]>([]);
+  const [currentCodingQuestionIndex, setCurrentCodingQuestionIndex] = useState(0);
+  const [hasCodingQuestions, setHasCodingQuestions] = useState(false);
+
   const lastUserResponseRef = useRef<HTMLDivElement | null>(null);
+
+  // NEW: Load coding questions if interview has them
+  useEffect(() => {
+    const loadCodingQuestions = async () => {
+      if (interview.has_coding_questions) {
+        try {
+          const questions = await CodingQuestionsService.getCodingQuestionsForInterview(interview.id);
+          if (questions.length > 0) {
+            const codingQuestionData = questions.map(q => q.coding_question).filter(Boolean) as CodingQuestion[];
+            setCodingQuestions(codingQuestionData);
+            setHasCodingQuestions(true);
+          }
+        } catch (error) {
+          console.error('Error loading coding questions:', error);
+        }
+      }
+    };
+
+    loadCodingQuestions();
+  }, [interview.id, interview.has_coding_questions]);
 
   const handleFeedbackSubmit = async (
     formData: Omit<FeedbackData, "interview_id">,
@@ -103,6 +152,71 @@ function Call({ interview }: InterviewProps) {
     } catch (error) {
       console.error("Error submitting feedback:", error);
       toast.error("An error occurred. Please try again later.");
+    }
+  };
+
+  const handleCodingExecute = async (code: string, language: string) => {
+    try {
+      const response = await fetch('/api/execute-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language,
+          testCases: codingQuestions[currentCodingQuestionIndex]?.test_cases?.map(tc => ({
+            input: tc.input,
+            expectedOutput: tc.expected_output
+          })) || []
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Execution failed');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Execution error:', error);
+      throw error;
+    }
+  };
+
+  const handleCodingSubmit = async (code: string, language: string) => {
+    try {
+      const response = await fetch('/api/submit-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language,
+          problemId: codingQuestions[currentCodingQuestionIndex]?.id,
+          interviewId: interview.id,
+          responseId: callId // Use call ID as response reference
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Submission failed');
+      }
+
+      toast.success(`Code submitted! Score: ${result.score}/100`, {
+        description: `${result.testResults.passed}/${result.testResults.total} test cases passed`,
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Submission error:', error);
+      toast.error('Submission failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   };
 
@@ -461,51 +575,127 @@ function Call({ interview }: InterviewProps) {
                 </div>
               )}
               {isStarted && !isEnded && !isOldUser && (
-                <div className="flex flex-row flex-1 min-h-0">
-                  <div className="border-x-2 border-grey w-[50%] flex flex-col">
-                    <div
-                      className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
-                    >
-                      {lastInterviewerResponse}
-                    </div>
-                    <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
-                      <Image
-                        src={interviewerImg}
-                        alt="Image of the interviewer"
-                        width={120}
-                        height={120}
-                        className={`object-cover object-center mx-auto my-auto ${
-                          activeTurn === "agent"
-                            ? `border-4 border-[${interview.theme_color}] rounded-full`
-                            : ""
+                <div className="flex flex-col flex-1 min-h-0">
+                  {/* Tab Navigation - only show if has coding questions */}
+                  {hasCodingQuestions && (
+                    <div className="flex w-full border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                      <button
+                        onClick={() => setActiveTab('conversation')}
+                        className={`flex items-center px-6 py-3 font-medium text-sm transition-colors ${
+                          activeTab === 'conversation'
+                            ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                            : 'text-gray-500 hover:text-gray-700'
                         }`}
-                      />
-                      <div className="font-semibold mt-2">Interviewer</div>
+                      >
+                        <MessageSquare className="w-4 h-4 mr-2" />
+                        Conversation
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('coding')}
+                        className={`flex items-center px-6 py-3 font-medium text-sm transition-colors ${
+                          activeTab === 'coding'
+                            ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <Code2 className="w-4 h-4 mr-2" />
+                        Coding Challenge
+                        {codingQuestions.length > 0 && (
+                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">
+                            {currentCodingQuestionIndex + 1}/{codingQuestions.length}
+                          </span>
+                        )}
+                      </button>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex flex-col w-[50%]">
-                    <div
-                      ref={lastUserResponseRef}
-                      className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
-                    >
-                      {lastUserResponse}
+                  {/* Tab Content */}
+                  {(!hasCodingQuestions || activeTab === 'conversation') && (
+                    <div className="flex flex-row flex-1 min-h-0">
+                      <div className="border-x-2 border-grey w-[50%] flex flex-col">
+                        <div
+                          className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
+                        >
+                          {lastInterviewerResponse}
+                        </div>
+                        <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
+                          <Image
+                            src={interviewerImg}
+                            alt="Image of the interviewer"
+                            width={120}
+                            height={120}
+                            className={`object-cover object-center mx-auto my-auto ${
+                              activeTurn === "agent"
+                                ? `border-4 border-[${interview.theme_color}] rounded-full`
+                                : ""
+                            }`}
+                          />
+                          <div className="font-semibold mt-2">Interviewer</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col w-[50%]">
+                        <div
+                          ref={lastUserResponseRef}
+                          className={`text-[18px] w-[90%] md:text-[20px] mx-auto px-4 py-4 overflow-y-auto flex-1 min-h-0 leading-relaxed`}
+                        >
+                          {lastUserResponse}
+                        </div>
+                        <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
+                          <Image
+                            src={`/user-icon.png`}
+                            alt="Picture of the user"
+                            width={120}
+                            height={120}
+                            className={`object-cover object-center mx-auto my-auto ${
+                              activeTurn === "user"
+                                ? `border-4 border-[${interview.theme_color}] rounded-full`
+                                : ""
+                            }`}
+                          />
+                          <div className="font-semibold mt-2">You</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col mx-auto justify-center items-center align-middle py-4 flex-shrink-0">
-                      <Image
-                        src={`/user-icon.png`}
-                        alt="Picture of the user"
-                        width={120}
-                        height={120}
-                        className={`object-cover object-center mx-auto my-auto ${
-                          activeTurn === "user"
-                            ? `border-4 border-[${interview.theme_color}] rounded-full`
-                            : ""
-                        }`}
+                  )}
+
+                  {/* Coding Environment Tab */}
+                  {hasCodingQuestions && activeTab === 'coding' && codingQuestions.length > 0 && (
+                    <div className="flex-1 min-h-0 p-4">
+                      <CodingEnvironment
+                        problem={convertToCodingProblem(codingQuestions[currentCodingQuestionIndex])}
+                        onExecute={handleCodingExecute}
+                        onSubmit={handleCodingSubmit}
                       />
-                      <div className="font-semibold mt-2">You</div>
+                      
+                      {/* Question Navigation */}
+                      {codingQuestions.length > 1 && (
+                        <div className="flex justify-center items-center mt-4 p-4 bg-gray-50 rounded-lg">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentCodingQuestionIndex(Math.max(0, currentCodingQuestionIndex - 1))}
+                            disabled={currentCodingQuestionIndex === 0}
+                            className="mr-4"
+                          >
+                            Previous Question
+                          </Button>
+                          <span className="text-sm text-gray-600 mx-4">
+                            Question {currentCodingQuestionIndex + 1} of {codingQuestions.length}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentCodingQuestionIndex(Math.min(codingQuestions.length - 1, currentCodingQuestionIndex + 1))}
+                            disabled={currentCodingQuestionIndex === codingQuestions.length - 1}
+                            className="ml-4"
+                          >
+                            Next Question
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -614,7 +804,7 @@ function Call({ interview }: InterviewProps) {
               Folo<span className="text-indigo-600">Up</span>
             </span>
           </div>
-          <ArrowUpRightSquareIcon className="h-[1.5rem] w-[1.5rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-indigo-500 " />
+          <ArrowUpRight className="h-[1.5rem] w-[1.5rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-indigo-500 " />
         </a>
       </div>
     </div>
