@@ -1,25 +1,4 @@
 {
-    "version": 2,
-    "name": "roundly-ai",
-    "builds": [
-        {
-            "src": "package.json",
-            "use": "@vercel/next"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/api/(.*)",
-            "dest": "/api/$1"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/$1"
-        }
-    ],
-    "env": {
-        "NODE_ENV": "production"
-    },
     "functions": {
         "src/app/api/analyze-code/route.ts": {
             "maxDuration": 30
