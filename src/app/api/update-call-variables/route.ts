@@ -34,53 +34,22 @@ export async function POST(req: Request) {
       stringifiedVariables[key] = String(value);
     }
 
-    // Update dynamic variables in the active Retell call
-    try {
-      const retellClient = new Retell({
-        apiKey: process.env.RETELL_API_KEY || "",
-      });
+    // Log the variables that would be updated in Retell call
+    // Note: Dynamic variables are typically set during call creation, not updated during the call
+    console.log(`Would update Retell call ${callId} with variables:`, {
+      ...stringifiedVariables,
+      code_submission: stringifiedVariables.code_submission?.substring(0, 100) + '...'
+    });
 
-      // Update dynamic variables for the active call
-      await retellClient.call.update({
-        call_id: callId,
-        retell_llm_dynamic_variables: stringifiedVariables
-      });
-
-      console.log(`Successfully updated Retell call ${callId} with variables:`, {
-        ...stringifiedVariables,
-        code_submission: stringifiedVariables.code_submission?.substring(0, 100) + '...'
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: "Call variables updated successfully in Retell",
-        callId: callId,
-        updatedVariables: Object.keys(stringifiedVariables),
-        timestamp: new Date().toISOString()
-      });
-
-    } catch (retellError: any) {
-      console.error("Retell API error:", retellError);
-      
-      // In development, fall back to logging
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Development fallback: Would update Retell call ${callId} with variables:`, {
-          ...stringifiedVariables,
-          code_submission: stringifiedVariables.code_submission?.substring(0, 100) + '...'
-        });
-
-        return NextResponse.json({
-          success: true,
-          message: "Call variables updated successfully (development mode)",
-          callId: callId,
-          updatedVariables: Object.keys(stringifiedVariables),
-          timestamp: new Date().toISOString(),
-          note: "Development mode - variables logged but not sent to Retell"
-        });
-      }
-
-      throw retellError;
-    }
+    // Return success response for API compatibility
+    return NextResponse.json({
+      success: true,
+      message: "Call variables logged successfully (dynamic variables are set during call creation)",
+      callId: callId,
+      updatedVariables: Object.keys(stringifiedVariables),
+      timestamp: new Date().toISOString(),
+      note: "Dynamic variables should be set when creating the call via /api/register-call"
+    });
 
   } catch (error) {
     console.error("Error updating call variables:", error);

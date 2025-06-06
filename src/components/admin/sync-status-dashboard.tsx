@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface SyncStatus {
@@ -196,10 +195,12 @@ export function SyncStatusDashboard() {
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="flex items-center gap-2 p-4">
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <span className="text-red-700">{error}</span>
+          </CardContent>
+        </Card>
       )}
 
       {/* Health Score Overview */}

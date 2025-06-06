@@ -56,7 +56,7 @@ export default function InterviewManagement() {
       
       const matchesStatus = filterStatus === 'all' || 
                            (filterStatus === 'active' && interview.is_active) ||
-                           (filterStatus === 'archived' && interview.is_archived);
+                           (filterStatus === 'archived' && !interview.is_active);
       
       return matchesSearch && matchesStatus;
     });
@@ -144,8 +144,8 @@ export default function InterviewManagement() {
   const stats = useMemo(() => {
     const total = interviews.length;
     const active = interviews.filter(i => i.is_active).length;
-    const archived = interviews.filter(i => i.is_archived).length;
-    const totalResponses = interviews.reduce((sum, i) => sum + (i.response_count || 0), 0);
+    const archived = interviews.filter(i => !i.is_active).length;
+    const totalResponses = interviews.reduce((sum, i) => sum + Number(i.response_count || 0), 0);
 
     return { total, active, archived, totalResponses };
   }, [interviews]);

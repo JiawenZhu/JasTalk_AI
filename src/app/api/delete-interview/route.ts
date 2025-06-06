@@ -67,7 +67,7 @@ export async function DELETE(req: Request) {
     const { data: userData, error: userDataError } = await supabase
       .from("user")
       .select("organization_id")
-      .eq('id', currentUser.id)
+      .eq('id', currentUser!.id)
       .single();
 
     // In development mode, provide fallback user data
@@ -87,8 +87,8 @@ export async function DELETE(req: Request) {
 
     // Verify access permissions
     const hasAccess = 
-      currentUserData.organization_id === interview.organization_id ||
-      currentUser.id === interview.user_id;
+      currentUserData!.organization_id === interview.organization_id ||
+      currentUser!.id === interview.user_id;
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -100,7 +100,7 @@ export async function DELETE(req: Request) {
     // Start deletion process
     console.log(`Starting deletion of interview: ${interview.name} (${interviewId})`);
     console.log(`Interview belongs to organization: ${interview.organization_id}, user: ${interview.user_id}`);
-    console.log(`Current user: ${currentUser.id}, organization: ${currentUserData.organization_id}`);
+    console.log(`Current user: ${currentUser!.id}, organization: ${currentUserData!.organization_id}`);
 
     // Step 1: Delete coding submissions for this interview
     // First get all response IDs for this interview
