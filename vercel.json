@@ -1,0 +1,56 @@
+{
+    "version": 2,
+    "name": "roundly-ai",
+    "builds": [
+        {
+            "src": "package.json",
+            "use": "@vercel/next"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/$1"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/$1"
+        }
+    ],
+    "env": {
+        "NODE_ENV": "production"
+    },
+    "functions": {
+        "src/app/api/analyze-code/route.ts": {
+            "maxDuration": 30
+        },
+        "src/app/api/retell-code-review/route.ts": {
+            "maxDuration": 30
+        },
+        "src/app/api/update-call-variables/route.ts": {
+            "maxDuration": 10
+        },
+        "src/app/api/register-call/route.ts": {
+            "maxDuration": 15
+        }
+    },
+    "headers": [
+        {
+            "source": "/api/(.*)",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization"
+                }
+            ]
+        }
+    ]
+}
