@@ -1,12 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize Supabase client lazily to avoid build-time errors
+const getSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase configuration");
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+};
 
 const getAllInterviews = async (userId: string, organizationId: string) => {
   try {
+    const supabase = getSupabaseClient();
     const { data: clientData, error: clientError } = await supabase
       .from("interview")
       .select(`*`)
@@ -23,6 +31,7 @@ const getAllInterviews = async (userId: string, organizationId: string) => {
 
 const getInterviewById = async (id: string) => {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("interview")
       .select(`*`)
@@ -37,6 +46,7 @@ const getInterviewById = async (id: string) => {
 };
 
 const updateInterview = async (payload: any, id: string) => {
+  const supabase = getSupabaseClient();
   const { error, data } = await supabase
     .from("interview")
     .update({ ...payload })
@@ -51,6 +61,7 @@ const updateInterview = async (payload: any, id: string) => {
 };
 
 const deleteInterview = async (id: string) => {
+  const supabase = getSupabaseClient();
   const { error, data } = await supabase
     .from("interview")
     .delete()
@@ -66,6 +77,7 @@ const deleteInterview = async (id: string) => {
 
 const getAllRespondents = async (interviewId: string) => {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("interview")
       .select(`respondents`)
@@ -93,6 +105,7 @@ const createInterview = async (payload: any) => {
     throw new Error('Missing user_id');
   }
 
+  const supabase = getSupabaseClient();
   const { error, data } = await supabase
     .from("interview")
     .insert({ ...payload });
@@ -107,6 +120,7 @@ const createInterview = async (payload: any) => {
 
 const deactivateInterviewsByOrgId = async (organizationId: string) => {
   try {
+    const supabase = getSupabaseClient();
     const { error } = await supabase
       .from("interview")
       .update({ is_active: false })
