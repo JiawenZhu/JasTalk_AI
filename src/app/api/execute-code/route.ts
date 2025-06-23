@@ -197,7 +197,7 @@ async function executeCodeMock(request: ExecutionRequest): Promise<ExecutionResu
   const { code, language, testCases } = request;
   
   // Simulate execution delay
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+  await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
   
   // Basic validation
   if (!code.trim()) {
@@ -207,19 +207,15 @@ async function executeCodeMock(request: ExecutionRequest): Promise<ExecutionResu
     };
   }
   
-  // Language-specific mock responses
+  // For JavaScript, let's do basic real execution
+  if (language === 'javascript') {
+    return await executeJavaScriptCode(code, testCases);
+  }
+  
+  // For other languages, keep mock for now
   let output = '';
-  let error = '';
   
   switch (language) {
-    case 'javascript':
-      if (code.includes('console.log')) {
-        output = 'Hello World!\nThis is mock JavaScript execution';
-      } else {
-        output = 'JavaScript code executed successfully';
-      }
-      break;
-      
     case 'python':
       if (code.includes('print')) {
         output = 'Hello World!\nThis is mock Python execution';
@@ -248,12 +244,12 @@ async function executeCodeMock(request: ExecutionRequest): Promise<ExecutionResu
     };
   }
   
-  // Mock test case execution
+  // Mock test case execution for non-JavaScript
   let testResults;
   if (testCases && testCases.length > 0) {
     const results = testCases.map((testCase, index) => {
       // Mock test execution - some pass, some fail for demo
-      const passed = Math.random() > 0.3; // 70% pass rate for demo
+      const passed = Math.random() > 0.5; // 50% pass rate for demo
       const actual = passed ? testCase.expectedOutput : `incorrect_output_${index}`;
       
       return {
@@ -278,6 +274,181 @@ async function executeCodeMock(request: ExecutionRequest): Promise<ExecutionResu
     testResults,
     executionTime: Math.floor(Math.random() * 500) + 100, // 100-600ms
     memoryUsed: Math.floor(Math.random() * 20) + 5 // 5-25MB
+  };
+}
+
+// Real JavaScript execution for basic cases
+async function executeJavaScriptCode(code: string, testCases?: Array<{input: string; expectedOutput: string}>): Promise<ExecutionResult> {
+  const startTime = Date.now();
+  let output = '';
+  let consoleOutput: string[] = [];
+  
+  try {
+    // Create a sandboxed context
+    const vm = require('vm');
+    
+    // Mock console.log to capture output
+    const context = {
+      console: {
+        log: (...args: any[]) => {
+          const message = args.map(arg => 
+            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+          ).join(' ');
+          consoleOutput.push(message);
+        }
+      },
+      JSON,
+      Math,
+      Array,
+      Object,
+      String,
+      Number,
+      Boolean,
+      Date,
+      RegExp,
+      parseInt,
+      parseFloat,
+      isNaN,
+      isFinite,
+      // Add common functions that might be used in coding problems
+      Map,
+      Set,
+      WeakMap,
+      WeakSet
+    };
+    
+    vm.createContext(context);
+    
+    // Execute the code with timeout
+    const result = vm.runInContext(code, context, {
+      timeout: 5000,
+      displayErrors: true
+    });
+    
+    output = consoleOutput.join('\n');
+    
+    // If there's no console output but there's a return value, show it
+    if (!output && result !== undefined) {
+      output = String(result);
+    }
+    
+    // If still no output, indicate successful execution
+    if (!output) {
+      output = 'Code executed successfully (no output)';
+    }
+    
+    // Execute test cases if provided
+    let testResults;
+    if (testCases && testCases.length > 0) {
+      testResults = await runJavaScriptTestCases(code, testCases);
+    }
+    
+    const executionTime = Date.now() - startTime;
+    
+    return {
+      success: true,
+      output,
+      testResults,
+      executionTime,
+      memoryUsed: Math.floor(Math.random() * 20) + 5 // Still mock memory for now
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Execution error',
+      executionTime: Date.now() - startTime
+    };
+  }
+}
+
+// Run test cases for JavaScript code
+async function runJavaScriptTestCases(code: string, testCases: Array<{input: string; expectedOutput: string}>): Promise<{
+  passed: number;
+  total: number;
+  results: Array<{
+    input: string;
+    expected: string;
+    actual: string;
+    passed: boolean;
+  }>;
+}> {
+  const results = [];
+  
+  for (const testCase of testCases) {
+    try {
+      // For coding problems, we need to extract the function and test it
+      // This is a simplified approach - you might need more sophisticated parsing
+      
+      let actual = 'No output';
+      let passed = false;
+      
+      // Try to find a function definition and call it with test inputs
+      // This is a basic implementation for common coding problems
+      if (code.includes('function') || code.includes('=>')) {
+        try {
+          const vm = require('vm');
+          const context = {
+            console: { log: () => {} }, // Suppress console.log for test execution
+            JSON, Math, Array, Object, String, Number, Boolean, Date, RegExp,
+            parseInt, parseFloat, isNaN, isFinite, Map, Set, WeakMap, WeakSet
+          };
+          vm.createContext(context);
+          
+          // Execute the code to define functions
+          vm.runInContext(code, context, { timeout: 2000 });
+          
+          // Try to parse test input and expected output
+          // This is a simplified parser - you'd need more robust parsing for production
+          const inputMatch = testCase.input.match(/nums = (\[[^\]]+\]), target = (\d+)/);
+          if (inputMatch) {
+            const nums = JSON.parse(inputMatch[1]);
+            const target = parseInt(inputMatch[2]);
+            
+            // Look for common function names
+            const functionNames = ['twoSum', 'solve', 'solution'];
+            let result = null;
+            
+            for (const funcName of functionNames) {
+              if (context[funcName] && typeof context[funcName] === 'function') {
+                result = context[funcName](nums, target);
+                break;
+              }
+            }
+            
+            if (result !== null) {
+              actual = JSON.stringify(result);
+              passed = actual === testCase.expectedOutput;
+            }
+          }
+        } catch (testError) {
+          actual = `Test execution error: ${testError.message}`;
+        }
+      }
+      
+      results.push({
+        input: testCase.input,
+        expected: testCase.expectedOutput,
+        actual,
+        passed
+      });
+      
+    } catch (error) {
+      results.push({
+        input: testCase.input,
+        expected: testCase.expectedOutput,
+        actual: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        passed: false
+      });
+    }
+  }
+  
+  const passed = results.filter(r => r.passed).length;
+  
+  return {
+    passed,
+    total: testCases.length,
+    results
   };
 }
 
