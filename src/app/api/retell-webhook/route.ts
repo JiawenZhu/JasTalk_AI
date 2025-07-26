@@ -1,329 +1,218 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase";
-import crypto from "crypto";
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase-server';
+import { logger } from '@/lib/logger';
 
-// Webhook verification for security
-function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  const expectedSignature = crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
-  
-  return crypto.timingSafeEqual(
-    Buffer.from(signature, 'hex'),
-    Buffer.from(expectedSignature, 'hex')
-  );
-}
-
-/**
- * Validates if an agent should be synced based on voice configuration
- */
-function shouldSyncAgent(agentData: any): { shouldSync: boolean; reason: string } {
-  // Primary requirement: Must have a voice configured
-  if (!agentData.voice_id) {
-    return {
-      shouldSync: false,
-      reason: 'No voice configured - agents without voice are not suitable for interviews'
-    };
-  }
-  
-  // Check for required fields
-  if (!agentData.agent_name) {
-    return {
-      shouldSync: false,
-      reason: 'Missing agent name'
-    };
-  }
-  
-  if (!agentData.agent_id) {
-    return {
-      shouldSync: false,
-      reason: 'Missing agent ID'
-    };
-  }
-  
-  // Check if agent name suggests it's for interviews
-  const name = agentData.agent_name.toLowerCase();
-  const isInterviewAgent = (
-    name.includes('bob') || 
-    name.includes('lisa') ||
-    name.includes('interview') ||
-    name.includes('conversation') ||
-    name.includes('empathetic') ||
-    name.includes('explorer') ||
-    name.includes('flow') ||
-    name.includes('agent')
-  );
-  
-  if (!isInterviewAgent) {
-    return {
-      shouldSync: false,
-      reason: 'Agent name does not match interview patterns'
-    };
-  }
-  
-  return {
-    shouldSync: true,
-    reason: 'Agent meets all sync criteria'
-  };
-}
-
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const rawBody = await req.text();
-    const signature = req.headers.get('x-retell-signature');
-    const webhookSecret = process.env.RETELL_WEBHOOK_SECRET;
+    const body = await request.json();
+    console.log('Retell webhook received:', JSON.stringify(body, null, 2));
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret && signature) {
-      if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-        console.error("Invalid webhook signature");
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
+    const { event_type, call_id, agent_id, agent_name, retell_llm_dynamic_variables } = body;
+
+    // Handle different webhook events
+    switch (event_type) {
+      case 'call_ended':
+        await handleCallEnded(body);
+        break;
+      case 'call_started':
+        await handleCallStarted(body);
+        break;
+      case 'transcript_updated':
+        await handleTranscriptUpdated(body);
+        break;
+      default:
+        console.log(`Unhandled event type: ${event_type}`);
     }
 
-    const event = JSON.parse(rawBody);
-    console.log("Received Retell webhook:", event.type, event.data?.agent_name || 'unknown');
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error processing Retell webhook:', error);
+    logger.error('Retell webhook error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
 
+async function handleCallStarted(data: any) {
+  console.log('Call started:', data.call_id);
+  
+  try {
     const supabase = createServerClient();
     
-    switch (event.type) {
-      case 'agent.created':
-        return await handleAgentCreated(supabase, event.data);
-      
-      case 'agent.updated':
-        return await handleAgentUpdated(supabase, event.data);
-      
-      case 'agent.deleted':
-        return await handleAgentDeleted(supabase, event.data);
-      
-      default:
-        console.log(`Unhandled webhook event type: ${event.type}`);
-        return NextResponse.json({ success: true, message: "Event type not handled" });
-    }
+    // Update practice session status to active
+    const { error } = await supabase
+      .from('practice_sessions')
+      .update({ 
+        status: 'active',
+        start_time: new Date().toISOString()
+      })
+      .eq('call_id', data.call_id);
 
+    if (error) {
+      console.error('Error updating practice session status:', error);
+    }
   } catch (error) {
-    console.error("Error processing Retell webhook:", error);
-    return NextResponse.json(
-      { error: "Failed to process webhook" },
-      { status: 500 }
-    );
+    console.error('Error handling call started:', error);
   }
 }
 
-async function handleAgentCreated(supabase: any, agentData: any) {
+async function handleCallEnded(data: any) {
+  console.log('Call ended:', data.call_id);
+  
   try {
-    console.log(`Processing agent creation: ${agentData.agent_name}`);
+    const supabase = createServerClient();
+    
+    // Extract call data
+    const {
+      call_id,
+      agent_id,
+      agent_name,
+      retell_llm_dynamic_variables,
+      call_summary,
+      transcript,
+      call_cost,
+      duration_seconds,
+      post_call_analysis
+    } = data;
 
-    // Validate if agent should be synced
-    const validation = shouldSyncAgent(agentData);
-    if (!validation.shouldSync) {
-      console.log(`Skipping agent ${agentData.agent_name}: ${validation.reason}`);
-      return NextResponse.json({ 
-        success: true, 
-        message: `Agent skipped: ${validation.reason}`,
-        skipped: true
-      });
+    // Get candidate name from dynamic variables
+    const candidateName = retell_llm_dynamic_variables?.name || retell_llm_dynamic_variables?.candidate_name || 'Unknown';
+
+    // Update practice session with call results
+    const { error: updateError } = await supabase
+      .from('practice_sessions')
+      .update({
+        status: 'completed',
+        end_time: new Date().toISOString(),
+        duration_seconds: duration_seconds || 0,
+        score: calculateScore(post_call_analysis),
+        metadata: {
+          call_summary,
+          post_call_analysis,
+          call_cost,
+          agent_id,
+          agent_name,
+          candidate_name: candidateName
+        }
+      })
+      .eq('call_id', call_id);
+
+    if (updateError) {
+      console.error('Error updating practice session:', updateError);
     }
 
-    // Check if agent already exists
-    const { data: existingAgent } = await supabase
-      .from("interviewer")
-      .select("id")
-      .eq('agent_id', agentData.agent_id)
-      .single();
+    // Store detailed conversation log
+    await storeConversationLog({
+      call_id,
+      agent_id,
+      agent_name,
+      candidate_name: candidateName,
+      call_summary,
+      transcript,
+      post_call_analysis,
+      duration_seconds,
+      call_cost
+    });
 
-    if (existingAgent) {
-      console.log(`Agent ${agentData.agent_name} already exists, skipping creation`);
-      return NextResponse.json({ 
-        success: true, 
-        message: "Agent already exists" 
+    console.log(`Call ${call_id} completed and logged successfully`);
+    
+  } catch (error) {
+    console.error('Error handling call ended:', error);
+  }
+}
+
+async function handleTranscriptUpdated(data: any) {
+  console.log('Transcript updated for call:', data.call_id);
+  
+  try {
+    const supabase = createServerClient();
+    
+    // Store real-time transcript updates
+    const { error } = await supabase
+      .from('practice_responses')
+      .insert({
+        practice_session_id: await getPracticeSessionId(data.call_id),
+        question_id: null, // Will be updated when we can map to specific questions
+        user_response: data.transcript?.user_message || '',
+        ai_feedback: data.transcript?.agent_message || '',
+        response_duration_seconds: data.transcript?.duration || 0,
+        metadata: {
+          timestamp: data.transcript?.timestamp,
+          speaker: data.transcript?.speaker
+        }
       });
+
+    if (error) {
+      console.error('Error storing transcript update:', error);
     }
+  } catch (error) {
+    console.error('Error handling transcript update:', error);
+  }
+}
 
-    // Create new interviewer record
-    const avatarImage = getAvatarForAgent(agentData.agent_name);
-    const description = getDescriptionForAgent(agentData.agent_name);
+async function storeConversationLog(data: {
+  call_id: string;
+  agent_id: string;
+  agent_name: string;
+  candidate_name: string;
+  call_summary: any;
+  transcript: any;
+  post_call_analysis: any;
+  duration_seconds: number;
+  call_cost: any;
+}) {
+  try {
+    const supabase = createServerClient();
+    
+    // Create conversation log entry with simplified schema
+    const { error } = await supabase
+      .from('conversation_logs')
+      .insert({
+        call_id: data.call_id,
+        agent_id: data.agent_id,
+        agent_name: data.agent_name,
+        candidate_name: data.candidate_name,
+        transcript: data.transcript || [],
+        post_call_analysis: data.post_call_analysis || {},
+        duration_seconds: data.duration_seconds
+      });
 
-    const interviewerData = {
-      agent_id: agentData.agent_id,
-      name: agentData.agent_name,
-      description: description,
-      image: avatarImage,
-      audio: agentData.voice_id ? `${(agentData.agent_name || 'default').replace(/\s+/g, '')}.wav` : "default.wav",
-      empathy: 7,
-      exploration: 8,
-      rapport: 7,
-      speed: 5,
-      last_synced_at: new Date().toISOString(),
-      sync_status: 'active'
-    };
+    if (error) {
+      console.error('Error storing conversation log:', error);
+    } else {
+      console.log(`Conversation log stored for call ${data.call_id}`);
+    }
+  } catch (error) {
+    console.error('Error in storeConversationLog:', error);
+  }
+}
 
-    const { data: newAgent, error } = await supabase
-      .from("interviewer")
-      .insert(interviewerData)
-      .select()
+async function getPracticeSessionId(callId: string): Promise<string | null> {
+  try {
+    const supabase = createServerClient();
+    
+    const { data, error } = await supabase
+      .from('practice_sessions')
+      .select('id')
+      .eq('call_id', callId)
       .single();
 
     if (error) {
-      console.error(`Error creating agent ${agentData.agent_name}:`, error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Error getting practice session ID:', error);
+      return null;
     }
 
-    console.log(`Successfully created voice-enabled agent: ${agentData.agent_name}`);
-    return NextResponse.json({ 
-      success: true, 
-      message: "Voice-enabled agent created",
-      agent: newAgent
-    });
-
+    return data?.id || null;
   } catch (error) {
-    console.error("Error in handleAgentCreated:", error);
-    return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
+    console.error('Error in getPracticeSessionId:', error);
+    return null;
   }
 }
 
-async function handleAgentUpdated(supabase: any, agentData: any) {
-  try {
-    console.log(`Processing agent update: ${agentData.agent_name}`);
-
-    // Validate if agent should be synced
-    const validation = shouldSyncAgent(agentData);
-    
-    const { data: existingAgent, error: fetchError } = await supabase
-      .from("interviewer")
-      .select("*")
-      .eq('agent_id', agentData.agent_id)
-      .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error(`Error fetching agent ${agentData.agent_id}:`, fetchError);
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
-    }
-
-    if (!existingAgent) {
-      if (validation.shouldSync) {
-        console.log(`Agent ${agentData.agent_name} not found in database, triggering creation`);
-        return await handleAgentCreated(supabase, agentData);
-      } else {
-        console.log(`Agent ${agentData.agent_name} not found and doesn't meet sync criteria: ${validation.reason}`);
-        return NextResponse.json({ 
-          success: true, 
-          message: `Agent not synced: ${validation.reason}`,
-          skipped: true
-        });
-      }
-    }
-
-    // Agent exists in database
-    if (!validation.shouldSync) {
-      // Agent no longer meets sync criteria (e.g., voice was removed)
-      console.log(`Agent ${agentData.agent_name} no longer meets sync criteria: ${validation.reason}`);
-      
-      const { error: orphanError } = await supabase
-        .from("interviewer")
-        .update({
-          sync_status: 'orphaned',
-          last_synced_at: new Date().toISOString()
-        })
-        .eq('agent_id', agentData.agent_id);
-
-      if (orphanError) {
-        console.error(`Error marking agent ${agentData.agent_name} as orphaned:`, orphanError);
-        return NextResponse.json({ error: orphanError.message }, { status: 500 });
-      }
-
-      console.log(`Marked agent as orphaned: ${agentData.agent_name} (reason: ${validation.reason})`);
-      return NextResponse.json({ 
-        success: true, 
-        message: `Agent marked as orphaned: ${validation.reason}`,
-        orphaned: true
-      });
-    }
-
-    // Update existing agent
-    const updateData = {
-      name: agentData.agent_name,
-      last_synced_at: new Date().toISOString(),
-      sync_status: 'active'
-    };
-
-    const { error: updateError } = await supabase
-      .from("interviewer")
-      .update(updateData)
-      .eq('agent_id', agentData.agent_id);
-
-    if (updateError) {
-      console.error(`Error updating agent ${agentData.agent_name}:`, updateError);
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    console.log(`Successfully updated voice-enabled agent: ${agentData.agent_name}`);
-    return NextResponse.json({ 
-      success: true, 
-      message: "Voice-enabled agent updated" 
-    });
-
-  } catch (error) {
-    console.error("Error in handleAgentUpdated:", error);
-    return NextResponse.json({ error: "Failed to update agent" }, { status: 500 });
-  }
-}
-
-async function handleAgentDeleted(supabase: any, agentData: any) {
-  try {
-    console.log(`Processing agent deletion: ${agentData.agent_id}`);
-
-    // Mark agent as orphaned instead of deleting immediately
-    const { error: updateError } = await supabase
-      .from("interviewer")
-      .update({
-        sync_status: 'orphaned',
-        last_synced_at: new Date().toISOString()
-      })
-      .eq('agent_id', agentData.agent_id);
-
-    if (updateError) {
-      console.error(`Error marking agent as orphaned:`, updateError);
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    console.log(`Marked agent as orphaned: ${agentData.agent_id}`);
-    return NextResponse.json({ 
-      success: true, 
-      message: "Agent marked as orphaned due to deletion from Retell AI" 
-    });
-
-  } catch (error) {
-    console.error("Error in handleAgentDeleted:", error);
-    return NextResponse.json({ error: "Failed to handle agent deletion" }, { status: 500 });
-  }
-}
-
-function getAvatarForAgent(agentName: string): string {
-  const avatarMapping: { [key: string]: string } = {
-    "Bob": "/interviewers/Bob.png",
-    "Lisa": "/interviewers/Lisa.png", 
-    "Empathetic Bob": "/interviewers/Bob.png",
-    "Explorer Lisa": "/interviewers/Lisa.png",
-    "Conversation": "/user-icon.png",
-    "Conversation Flow Agent": "/user-icon.png",
-    "default": "/user-icon.png"
-  };
+function calculateScore(postCallAnalysis: any): number {
+  if (!postCallAnalysis) return 0;
   
-  return avatarMapping[agentName] || avatarMapping["default"];
-}
-
-function getDescriptionForAgent(agentName: string): string {
-  const descriptionMapping: { [key: string]: string } = {
-    "Bob": "Hi! I'm Bob, your go-to empathetic interviewer. I excel at understanding and connecting with people on a deeper level, ensuring every conversation is insightful and meaningful.",
-    "Empathetic Bob": "Hi! I'm Bob, your go-to empathetic interviewer. I excel at understanding and connecting with people on a deeper level, ensuring every conversation is insightful and meaningful.",
-    "Lisa": "Hi! I'm Lisa, an enthusiastic and empathetic interviewer who loves to explore. With a perfect balance of empathy and rapport, I delve deep into conversations while maintaining a steady pace.",
-    "Explorer Lisa": "Hi! I'm Lisa, an enthusiastic and empathetic interviewer who loves to explore. With a perfect balance of empathy and rapport, I delve deep into conversations while maintaining a steady pace.",
-    "Conversation": "A versatile conversation flow agent designed for structured interviews and dynamic interactions.",
-    "Conversation Flow Agent": "A sophisticated conversation flow agent designed for structured interviews and dynamic interactions with advanced conversation management capabilities.",
-  };
-  
-  return descriptionMapping[agentName] || 
-         `${agentName || 'Unknown Agent'} - A professional AI interviewer ready to conduct insightful conversations.`;
+  // Extract score from post-call analysis
+  // This will depend on how Retell provides scoring data
+  const score = postCallAnalysis.score || postCallAnalysis.overall_score || 0;
+  return Math.round(score * 100); // Convert to percentage if needed
 } 

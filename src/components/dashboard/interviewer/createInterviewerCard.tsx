@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Image as LucideImage } from "lucide-react";
 import { Plus } from "lucide-react";
@@ -36,6 +36,27 @@ const createInterviewerCard = () => {
       setImage("");
     }
   }, [open]);
+
+  // Stable handlers to prevent re-renders and focus loss
+  const handleNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setName(e.target.value);
+  }, []);
+
+  const handleEmpathyChange = useCallback((value: number[]) => {
+    setEmpathy(value[0]);
+  }, []);
+
+  const handleRapportChange = useCallback((value: number[]) => {
+    setRapport(value[0]);
+  }, []);
+
+  const handleExplorationChange = useCallback((value: number[]) => {
+    setExploration(value[0]);
+  }, []);
+
+  const handleSpeedChange = useCallback((value: number[]) => {
+    setSpeed(value[0]);
+  }, []);
 
   const onSave = async () => {
     await createInterviewer({
@@ -117,7 +138,7 @@ const createInterviewerCard = () => {
                   className="border-b-2 focus:outline-none border-gray-500 px-2 py-0.5 ml-3 w-[12.5rem]"
                   placeholder="e.g. Empathetic Bob"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={handleNameChange}
                 />
               </div>
               <h3 className="text-lg mt-3 font-medium">Interviewer Settings</h3>
@@ -129,7 +150,7 @@ const createInterviewerCard = () => {
                       value={[empathy]}
                       max={1}
                       step={0.1}
-                      onValueChange={(value) => setEmpathy(value[0])}
+                      onValueChange={handleEmpathyChange}
                     />
                     <span className="w-8 text-left">{empathy}</span>
                   </div>
@@ -141,7 +162,7 @@ const createInterviewerCard = () => {
                       value={[rapport]}
                       max={1}
                       step={0.1}
-                      onValueChange={(value) => setRapport(value[0])}
+                      onValueChange={handleRapportChange}
                     />
                     <span className="w-8 text-left">{rapport}</span>
                   </div>
@@ -153,7 +174,7 @@ const createInterviewerCard = () => {
                       value={[exploration]}
                       max={1}
                       step={0.1}
-                      onValueChange={(value) => setExploration(value[0])}
+                      onValueChange={handleExplorationChange}
                     />
                     <span className="w-8 text-left">{exploration}</span>
                   </div>
@@ -165,7 +186,7 @@ const createInterviewerCard = () => {
                       value={[speed]}
                       max={1}
                       step={0.1}
-                      onValueChange={(value) => setSpeed(value[0])}
+                      onValueChange={handleSpeedChange}
                     />
                     <span className="w-8 text-left">{speed}</span>
                   </div>

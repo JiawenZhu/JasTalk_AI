@@ -4,7 +4,7 @@ import React, { useState, useContext, ReactNode, useEffect } from "react";
 import { Interview } from "@/types/interview";
 import { InterviewService } from "@/services/interviews.service";
 import { useAuth } from "@/contexts/auth.context";
-import { useOrganization } from "@/contexts/organization.context";
+
 
 interface InterviewContextProps {
   interviews: Interview[];
@@ -33,26 +33,22 @@ interface InterviewProviderProps {
 export function InterviewProvider({ children }: InterviewProviderProps) {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const { user, loading: authLoading } = useAuth();
-  const { organization, loading: orgLoading } = useOrganization();
   const [interviewsLoading, setInterviewsLoading] = useState(false);
 
   const fetchInterviews = async () => {
-    // Don't fetch if auth or organization are still loading
-    if (authLoading || orgLoading) {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
       return;
     }
 
-    // Don't fetch if we don't have both user and organization
-    if (!user?.id || !organization?.id) {
+    // Don't fetch if we don't have user
+    if (!user?.id) {
       return;
     }
 
     try {
       setInterviewsLoading(true);
-      const response = await InterviewService.getAllInterviews(
-        user.id,
-        organization.id,
-      );
+      const response = await InterviewService.getAllInterviews(user.id);
       
       setInterviews(response || []);
     } catch (error) {
@@ -69,11 +65,11 @@ export function InterviewProvider({ children }: InterviewProviderProps) {
   };
 
   useEffect(() => {
-    // Only fetch when both contexts are loaded and we have the required data
-    if (!authLoading && !orgLoading && user?.id && organization?.id) {
+    // Only fetch when auth is loaded and we have the required data
+    if (!authLoading && user?.id) {
       fetchInterviews();
     }
-  }, [user?.id, organization?.id, authLoading, orgLoading]);
+  }, [user?.id, authLoading]);
 
   return (
     <InterviewContext.Provider

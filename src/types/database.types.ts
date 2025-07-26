@@ -4,550 +4,375 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
-      feedback: {
+      interviews: {
         Row: {
-          created_at: string;
-          email: string | null;
-          feedback: string | null;
-          id: number;
-          interview_id: string | null;
-          satisfaction: number | null;
-        };
+          id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+          title: string
+          description: string | null
+          status: 'draft' | 'active' | 'completed' | 'archived'
+          interview_type: string | null
+          duration_minutes: number | null
+          question_count: number | null
+          is_practice: boolean | null
+          agent_id: string | null
+          agent_name: string | null
+          metadata: Json | null
+        }
         Insert: {
-          created_at?: string;
-          email?: string | null;
-          feedback?: string | null;
-          id?: number;
-          interview_id?: string | null;
-          satisfaction?: number | null;
-        };
+          id?: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+          title: string
+          description?: string | null
+          status?: 'draft' | 'active' | 'completed' | 'archived'
+          interview_type?: string | null
+          duration_minutes?: number | null
+          question_count?: number | null
+          is_practice?: boolean | null
+          agent_id?: string | null
+          agent_name?: string | null
+          metadata?: Json | null
+        }
         Update: {
-          created_at?: string;
-          email?: string | null;
-          feedback?: string | null;
-          id?: number;
-          interview_id?: string | null;
-          satisfaction?: number | null;
-        };
-        Relationships: [];
-      };
-      interview: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          title?: string
+          description?: string | null
+          status?: 'draft' | 'active' | 'completed' | 'archived'
+          interview_type?: string | null
+          duration_minutes?: number | null
+          question_count?: number | null
+          is_practice?: boolean | null
+          agent_id?: string | null
+          agent_name?: string | null
+          metadata?: Json | null
+        }
+      }
+      practice_sessions: {
         Row: {
-          created_at: string;
-          description: string | null;
-          id: string;
-          insights: string[] | null;
-          interviewer_id: number | null;
-          is_active: boolean;
-          is_anonymous: boolean;
-          is_archived: boolean;
-          logo_url: string | null;
-          name: string | null;
-          objective: string | null;
-          organization_id: string | null;
-          question_count: number | null;
-          questions: Json | null;
-          quotes: Json[] | null;
-          readable_slug: string | null;
-          respondents: string[] | null;
-          response_count: number | null;
-          theme_color: string | null;
-          time_duration: string | null;
-          url: string | null;
-          user_id: string | null;
-        };
+          id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+          interview_id: string | null
+          session_name: string
+          status: 'in-progress' | 'completed' | 'abandoned'
+          start_time: string | null
+          end_time: string | null
+          duration_seconds: number | null
+          score: number | null
+          total_questions: number | null
+          completed_questions: number | null
+          agent_id: string | null
+          agent_name: string | null
+          metadata: Json | null
+        }
         Insert: {
-          created_at?: string;
-          description?: string | null;
-          id: string;
-          insights?: string[] | null;
-          interviewer_id?: number | null;
-          is_active?: boolean;
-          is_anonymous?: boolean;
-          is_archived?: boolean;
-          logo_url?: string | null;
-          name?: string | null;
-          objective?: string | null;
-          organization_id?: string | null;
-          question_count?: number | null;
-          questions?: Json | null;
-          quotes?: Json[] | null;
-          readable_slug?: string | null;
-          respondents?: string[] | null;
-          response_count?: number | null;
-          theme_color?: string | null;
-          time_duration?: string | null;
-          url?: string | null;
-          user_id?: string | null;
-        };
+          id?: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+          interview_id?: string | null
+          session_name: string
+          status?: 'in-progress' | 'completed' | 'abandoned'
+          start_time?: string | null
+          end_time?: string | null
+          duration_seconds?: number | null
+          score?: number | null
+          total_questions?: number | null
+          completed_questions?: number | null
+          agent_id?: string | null
+          agent_name?: string | null
+          metadata?: Json | null
+        }
         Update: {
-          created_at?: string;
-          description?: string | null;
-          id?: string;
-          insights?: string[] | null;
-          interviewer_id?: number | null;
-          is_active?: boolean;
-          is_anonymous?: boolean;
-          is_archived?: boolean;
-          logo_url?: string | null;
-          name?: string | null;
-          objective?: string | null;
-          organization_id?: string | null;
-          question_count?: number | null;
-          questions?: Json | null;
-          quotes?: Json[] | null;
-          readable_slug?: string | null;
-          respondents?: string[] | null;
-          response_count?: number | null;
-          theme_color?: string | null;
-          time_duration?: string | null;
-          url?: string | null;
-          user_id?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "interviews_interviewer_id_fkey";
-            columns: ["interviewer_id"];
-            isOneToOne: false;
-            referencedRelation: "interviewer";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      interviewer: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          interview_id?: string | null
+          session_name?: string
+          status?: 'in-progress' | 'completed' | 'abandoned'
+          start_time?: string | null
+          end_time?: string | null
+          duration_seconds?: number | null
+          score?: number | null
+          total_questions?: number | null
+          completed_questions?: number | null
+          agent_id?: string | null
+          agent_name?: string | null
+          metadata?: Json | null
+        }
+      }
+      questions: {
         Row: {
-          agent_id: string;
-          audio: string | null;
-          created_at: string;
-          description: string;
-          empathy: number;
-          exploration: number;
-          id: number;
-          image: string;
-          name: string;
-          rapport: number;
-          speed: number;
-        };
+          id: string
+          created_at: string
+          interview_id: string | null
+          question_text: string
+          question_type: 'behavioral' | 'technical' | 'system-design' | 'coding' | 'general'
+          difficulty: string | null
+          category: string | null
+          order_index: number | null
+          is_active: boolean | null
+          metadata: Json | null
+        }
         Insert: {
-          agent_id?: string;
-          audio?: string | null;
-          created_at?: string;
-          description?: string;
-          empathy?: number;
-          exploration?: number;
-          id?: number;
-          image?: string;
-          name?: string;
-          rapport?: number;
-          speed?: number;
-        };
+          id?: string
+          created_at?: string
+          interview_id?: string | null
+          question_text: string
+          question_type?: 'behavioral' | 'technical' | 'system-design' | 'coding' | 'general'
+          difficulty?: string | null
+          category?: string | null
+          order_index?: number | null
+          is_active?: boolean | null
+          metadata?: Json | null
+        }
         Update: {
-          agent_id?: string;
-          audio?: string | null;
-          created_at?: string;
-          description?: string;
-          empathy?: number;
-          exploration?: number;
-          id?: number;
-          image?: string;
-          name?: string;
-          rapport?: number;
-          speed?: number;
-        };
-        Relationships: [];
-      };
-      organization: {
+          id?: string
+          created_at?: string
+          interview_id?: string | null
+          question_text?: string
+          question_type?: 'behavioral' | 'technical' | 'system-design' | 'coding' | 'general'
+          difficulty?: string | null
+          category?: string | null
+          order_index?: number | null
+          is_active?: boolean | null
+          metadata?: Json | null
+        }
+      }
+      practice_responses: {
         Row: {
-          allowed_responses_count: number | null;
-          created_at: string;
-          id: string;
-          image_url: string | null;
-          name: string | null;
-          plan: Database["public"]["Enums"]["plan"] | null;
-        };
+          id: string
+          created_at: string
+          practice_session_id: string | null
+          question_id: string | null
+          user_response: string | null
+          ai_feedback: string | null
+          score: number | null
+          response_duration_seconds: number | null
+          metadata: Json | null
+        }
         Insert: {
-          allowed_responses_count?: number | null;
-          created_at?: string;
-          id: string;
-          image_url?: string | null;
-          name?: string | null;
-          plan?: Database["public"]["Enums"]["plan"] | null;
-        };
+          id?: string
+          created_at?: string
+          practice_session_id?: string | null
+          question_id?: string | null
+          user_response?: string | null
+          ai_feedback?: string | null
+          score?: number | null
+          response_duration_seconds?: number | null
+          metadata?: Json | null
+        }
         Update: {
-          allowed_responses_count?: number | null;
-          created_at?: string;
-          id?: string;
-          image_url?: string | null;
-          name?: string | null;
-          plan?: Database["public"]["Enums"]["plan"] | null;
-        };
-        Relationships: [];
-      };
-      response: {
+          id?: string
+          created_at?: string
+          practice_session_id?: string | null
+          question_id?: string | null
+          user_response?: string | null
+          ai_feedback?: string | null
+          score?: number | null
+          response_duration_seconds?: number | null
+          metadata?: Json | null
+        }
+      }
+      conversation_logs: {
         Row: {
-          analytics: Json | null;
-          call_id: string | null;
-          candidate_status: string | null;
-          created_at: string;
-          details: Json | null;
-          duration: number | null;
-          email: string | null;
-          id: number;
-          interview_id: string | null;
-          is_analysed: boolean | null;
-          is_ended: boolean | null;
-          is_viewed: boolean | null;
-          name: string | null;
-          tab_switch_count: number | null;
-        };
+          id: string
+          call_id: string
+          agent_id: string
+          agent_name: string
+          candidate_name: string
+          summary: string | null
+          detailed_summary: string | null
+          transcript: Json
+          post_call_analysis: Json
+          duration_seconds: number
+          call_cost: Json
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
         Insert: {
-          analytics?: Json | null;
-          call_id?: string | null;
-          candidate_status?: string | null;
-          created_at?: string;
-          details?: Json | null;
-          duration?: number | null;
-          email?: string | null;
-          id?: number;
-          interview_id?: string | null;
-          is_analysed?: boolean | null;
-          is_ended?: boolean | null;
-          is_viewed?: boolean | null;
-          name?: string | null;
-          tab_switch_count?: number | null;
-        };
+          id?: string
+          call_id: string
+          agent_id: string
+          agent_name: string
+          candidate_name: string
+          summary?: string | null
+          detailed_summary?: string | null
+          transcript?: Json
+          post_call_analysis?: Json
+          duration_seconds?: number
+          call_cost?: Json
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
         Update: {
-          analytics?: Json | null;
-          call_id?: string | null;
-          candidate_status?: string | null;
-          created_at?: string;
-          details?: Json | null;
-          duration?: number | null;
-          email?: string | null;
-          id?: number;
-          interview_id?: string | null;
-          is_analysed?: boolean | null;
-          is_ended?: boolean | null;
-          is_viewed?: boolean | null;
-          name?: string | null;
-          tab_switch_count?: number | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "response_interview_id_fkey";
-            columns: ["interview_id"];
-            isOneToOne: false;
-            referencedRelation: "interview";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      user: {
+          id?: string
+          call_id?: string
+          agent_id?: string
+          agent_name?: string
+          candidate_name?: string
+          summary?: string | null
+          detailed_summary?: string | null
+          transcript?: Json
+          post_call_analysis?: Json
+          duration_seconds?: number
+          call_cost?: Json
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      interviewers: {
         Row: {
-          created_at: string;
-          email: string | null;
-          id: string;
-          organization_id: string | null;
-        };
+          id: string
+          name: string
+          avatar_url: string | null
+          voice_id: string | null
+          user_id: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          is_active: boolean
+          settings: Json | null
+          retell_agent_id: string | null
+          sync_status: string | null
+          last_sync_at: string | null
+        }
         Insert: {
-          created_at?: string;
-          email?: string | null;
-          id: string;
-          organization_id?: string | null;
-        };
+          id?: string
+          name: string
+          avatar_url?: string | null
+          voice_id?: string | null
+          user_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          is_active?: boolean
+          settings?: Json | null
+          retell_agent_id?: string | null
+          sync_status?: string | null
+          last_sync_at?: string | null
+        }
         Update: {
-          created_at?: string;
-          email?: string | null;
-          id?: string;
-          organization_id?: string | null;
-        };
-        Relationships: [];
-      };
-    };
+          id?: string
+          name?: string
+          avatar_url?: string | null
+          voice_id?: string | null
+          user_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          is_active?: boolean
+          settings?: Json | null
+          retell_agent_id?: string | null
+          sync_status?: string | null
+          last_sync_at?: string | null
+        }
+      }
+      responses: {
+        Row: {
+          id: string
+          interview_id: string | null
+          interviewer_id: string | null
+          user_id: string | null
+          call_id: string | null
+          content: string | null
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id?: string | null
+          interviewer_id?: string | null
+          user_id?: string | null
+          call_id?: string | null
+          content?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          interview_id?: string | null
+          interviewer_id?: string | null
+          user_id?: string | null
+          call_id?: string | null
+          content?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      coding_questions: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          difficulty: string | null
+          category: string | null
+          language: string | null
+          template_code: string | null
+          test_cases: Json | null
+          created_at: string
+          updated_at: string
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          difficulty?: string | null
+          category?: string | null
+          language?: string | null
+          template_code?: string | null
+          test_cases?: Json | null
+          created_at?: string
+          updated_at?: string
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          difficulty?: string | null
+          category?: string | null
+          language?: string | null
+          template_code?: string | null
+          test_cases?: Json | null
+          created_at?: string
+          updated_at?: string
+          is_active?: boolean
+        }
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
-      binary_quantize:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: unknown;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          };
-      halfvec_avg: {
-        Args: {
-          "": number[];
-        };
-        Returns: unknown;
-      };
-      halfvec_out: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      halfvec_send: {
-        Args: {
-          "": unknown;
-        };
-        Returns: string;
-      };
-      halfvec_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
-      };
-      hnsw_bit_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnsw_halfvec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnsw_sparsevec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnswhandler: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflat_bit_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflat_halfvec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflathandler: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      l2_norm:
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          };
-      l2_normalize:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: string;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          };
-      sparsevec_out: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      sparsevec_send: {
-        Args: {
-          "": unknown;
-        };
-        Returns: string;
-      };
-      sparsevec_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
-      };
-      vector_avg: {
-        Args: {
-          "": number[];
-        };
-        Returns: string;
-      };
-      vector_dims:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: number;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          };
-      vector_norm: {
-        Args: {
-          "": string;
-        };
-        Returns: number;
-      };
-      vector_out: {
-        Args: {
-          "": string;
-        };
-        Returns: unknown;
-      };
-      vector_send: {
-        Args: {
-          "": string;
-        };
-        Returns: string;
-      };
-      vector_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
-      };
-    };
+      [_ in never]: never
+    }
     Enums: {
-      plan: "free" | "pro" | "free_trial_over";
-    };
+      [_ in never]: never
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
-
-type PublicSchema = Database[Extract<keyof Database, "public">];
-
-export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R;
+      [_ in never]: never
     }
-    ? R
-    : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
-        Row: infer R;
-      }
-      ? R
-      : never
-    : never;
-
-export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I;
-    }
-    ? I
-    : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-        Insert: infer I;
-      }
-      ? I
-      : never
-    : never;
-
-export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U;
-    }
-    ? U
-    : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-        Update: infer U;
-      }
-      ? U
-      : never
-    : never;
-
-export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
-    | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
-    : never;
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof PublicSchema["CompositeTypes"]
-    | { schema: keyof Database },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database;
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never;
+}

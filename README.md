@@ -1,34 +1,36 @@
-[![GitHub stars](https://img.shields.io/github/stars/your-username/AI-Voice-Agent-Marketplace-Platform?style=social)](https://github.com/your-username/AI-Voice-Agent-Marketplace-Platform/stargazers)
-![License](https://img.shields.io/github/license/your-username/AI-Voice-Agent-Marketplace-Platform)
+[![GitHub stars](https://img.shields.io/github/stars/JiawenZhu/Roundly.AI?style=social)](https://github.com/JiawenZhu/Roundly.AI/stargazers)
+![License](https://img.shields.io/github/license/JiawenZhu/Roundly.AI)
 
-# AI Voice Agent Marketplace Platform
+# Roundly.AI - AI-Powered Voice Interview Platform
 
-A comprehensive marketplace platform for discovering, testing, and integrating AI voice agents. Built with Next.js, featuring advanced voice interactions, code analysis capabilities, and a modern marketplace interface.
+A comprehensive platform for AI-powered voice interviews and practice sessions. Built with Next.js, featuring advanced voice interactions, conversation logging, and a modern interview interface.
 
-<img src="public/FoloUp.png" alt="AI Voice Agent Marketplace" width="800">
+<img src="public/FoloUp.png" alt="Roundly.AI Platform" width="800">
 
 <div style="display: flex; flex-direction: row; gap: 20px; margin: 20px 0;">
   <picture>
-    <img src="https://github.com/user-attachments/assets/91adf737-6f62-4f48-ae68-58855bc38ccf" alt="Marketplace Dashboard" width="400" style="max-width: 100%;">
+    <img src="https://github.com/user-attachments/assets/91adf737-6f62-4f48-ae68-58855bc38ccf" alt="Interview Dashboard" width="400" style="max-width: 100%;">
   </picture>
   <picture>
-    <img src="https://github.com/user-attachments/assets/91bbe5d5-1eff-4158-80d9-d98c2a53f59b" alt="Agent Interface" width="400" style="max-width: 100%;">
+    <img src="https://github.com/user-attachments/assets/91bbe5d5-1eff-4158-80d9-d98c2a53f59b" alt="Voice Interview Interface" width="400" style="max-width: 100%;">
   </picture>
 </div>
 
 ## ✨ Key Features
 
-### 🛍️ **Voice Agent Marketplace**
-- **Agent Discovery:** Browse and discover AI voice agents across different categories
-- **Agent Testing:** Test voice agents directly in the platform before integration
-- **Multiple Personalities:** Explore agents with various conversation styles and specialties
-- **Retell AI Integration:** Direct integration with Retell AI agent ecosystem
-
-### 🎙️ **Advanced Voice Interactions**
-- **Natural Conversations:** AI-powered voice interactions that adapt to user needs
+### 🎙️ **AI-Powered Voice Interviews**
+- **Natural Conversations:** AI-powered voice interactions that adapt to user responses
 - **Real-time Transcription:** Live transcript display during conversations
 - **Professional UI:** Clean, responsive interface optimized for voice interactions
-- **Multi-language Support:** Support for various languages and accents
+- **Multiple Interviewers:** Choose from various AI interviewer personalities
+- **Retell AI Integration:** Direct integration with Retell AI for high-quality voice interactions
+
+### 📝 **Conversation Logging & Playback**
+- **Audio Recording:** Full audio playback of interview sessions
+- **Transcript Review:** Detailed conversation transcripts with timestamps
+- **Performance Analysis:** Post-interview analysis and scoring
+- **Session History:** Complete history of all practice sessions
+- **Professional Player:** Custom audio player with seek, volume, and download controls
 
 ### 💻 **Code Analysis & Review**
 - **Voice-Enabled Code Review:** AI analyzes code and provides voice feedback
@@ -37,9 +39,16 @@ A comprehensive marketplace platform for discovering, testing, and integrating A
 - **Dynamic Variables:** Seamless integration with voice agents for code discussions
 - **Multiple Programming Languages:** Support for JavaScript, Python, Java, and more
 
+### 🎯 **Practice Session Management**
+- **Question Generation:** AI-powered interview question generation from job descriptions
+- **Session Continuation:** Resume interrupted practice sessions
+- **Progress Tracking:** Track improvement over time with detailed metrics
+- **Scoring System:** Comprehensive scoring across multiple categories
+- **"Practice Again" Feature:** Reuse questions for multiple practice sessions
+
 ### 📊 **Platform Management**
-- **Agent Management:** Comprehensive dashboard for managing voice agents
-- **Usage Analytics:** Track agent performance and user interactions
+- **Interviewer Management:** Comprehensive dashboard for managing voice agents
+- **Usage Analytics:** Track performance and user interactions
 - **Organization Support:** Multi-tenant architecture for teams and organizations
 - **API Integration:** RESTful APIs for third-party integrations
 
@@ -60,18 +69,18 @@ A comprehensive marketplace platform for discovering, testing, and integrating A
 ### 1. Installation
 
 ```bash
-git clone https://github.com/your-username/AI-Voice-Agent-Marketplace-Platform.git
-cd AI-Voice-Agent-Marketplace-Platform
+git clone https://github.com/JiawenZhu/Roundly.AI.git
+cd Roundly.AI
 yarn install
 ```
 
 ### 2. Environment Setup
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-Configure your `.env` file with the following variables:
+Configure your `.env.local` file with the following variables:
 
 ```env
 # Supabase Configuration
@@ -90,20 +99,23 @@ NEXT_PUBLIC_LIVE_URL=http://localhost:3000
 
 1. Create a new [Supabase](https://supabase.com/) project
 2. Navigate to SQL Editor
-3. Copy and execute the schema from `supabase_schema.sql`
-4. Add your Supabase URL and anon key to `.env`
+3. Run the database migrations:
+   ```bash
+   npx supabase db push
+   ```
+4. Add your Supabase URL and anon key to `.env.local`
 
 ### 4. Retell AI Setup
 
 1. Create an account at [Retell AI](https://retell.ai/)
 2. Create AI agents in your dashboard
 3. Get your API key from [Retell Dashboard](https://dashboard.retellai.com/apiKey)
-4. Add the API key to your `.env` file
+4. Add the API key to your `.env.local` file
 
 ### 5. OpenAI Setup
 
 1. Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Add it to your `.env` file as `OPENAI_API_KEY`
+2. Add it to your `.env.local` file as `OPENAI_API_KEY`
 
 ### 6. Start Development
 
@@ -111,21 +123,28 @@ NEXT_PUBLIC_LIVE_URL=http://localhost:3000
 yarn dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to see your marketplace platform!
+Visit [http://localhost:3000](http://localhost:3000) to see your interview platform!
 
 ## 🎨 Platform Features
 
-### Voice Agent Marketplace ✨
-- ✅ **Agent Discovery:** Browse and filter voice agents by category, rating, and features
-- ✅ **Live Testing:** Test agents directly in the platform with real-time voice interaction
-- ✅ **Integration Tools:** Easy-to-use APIs and SDKs for seamless integration
-- ✅ **Agent Analytics:** Comprehensive metrics and usage statistics
+### Voice Interview System ✨
+- ✅ **AI Interviewers:** Multiple personality types and specialties
+- ✅ **Live Voice Interaction:** Real-time voice conversations with AI
+- ✅ **Question Generation:** AI-powered questions from job descriptions
+- ✅ **Session Management:** Start, pause, and resume interview sessions
+
+### Conversation Logging & Playback
+- ✅ **Audio Recording:** Full interview audio with professional player
+- ✅ **Transcript Review:** Detailed conversation logs with timestamps
+- ✅ **Performance Analysis:** Comprehensive scoring and feedback
+- ✅ **Session History:** Complete archive of practice sessions
+- ✅ **Download Support:** Export audio and transcripts
 
 ### Advanced Voice Technology
 - ✅ **Real-time Voice Processing:** Low-latency voice interactions
 - ✅ **Dynamic Context:** Context-aware conversations with memory
 - ✅ **Multi-modal Support:** Voice, text, and code integration
-- ✅ **Custom Personalities:** Diverse agent personalities and specializations
+- ✅ **Custom Personalities:** Diverse interviewer personalities
 
 ### Code Integration Features
 - ✅ **Voice Code Review:** AI analyzes code and provides voice feedback
@@ -137,7 +156,7 @@ Visit [http://localhost:3000](http://localhost:3000) to see your marketplace pla
 - ✅ **User Management:** Comprehensive user and organization management
 - ✅ **API Management:** Rate limiting, authentication, and usage tracking
 - ✅ **Webhook System:** Real-time event notifications
-- ✅ **Analytics Dashboard:** Detailed platform and agent analytics
+- ✅ **Analytics Dashboard:** Detailed platform and performance analytics
 
 ## 🛠️ Tech Stack
 
@@ -153,52 +172,67 @@ Visit [http://localhost:3000](http://localhost:3000) to see your marketplace pla
 ## 📁 Project Structure
 
 ```
-AI-Voice-Agent-Marketplace-Platform/
+Roundly.AI/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── (client)/          # Client-side routes
 │   │   │   ├── dashboard/     # Main dashboard
-│   │   │   └── interviews/    # Agent testing interface
+│   │   │   └── interviewers/  # Interviewer management
 │   │   ├── (user)/            # User-facing routes
 │   │   │   └── call/          # Voice interaction interface
+│   │   ├── practice/          # Practice session routes
+│   │   │   ├── logs/          # Conversation logs
+│   │   │   ├── new/           # New practice session
+│   │   │   └── complete/      # Session completion
 │   │   └── api/               # API endpoints
-│   │       ├── create-interviewer/    # Agent management
-│   │       ├── sync-retell-agents/    # Retell integration
-│   │       └── execute-code/          # Code execution
+│   │       ├── conversation-logs/    # Log management
+│   │       ├── retell-audio/         # Audio retrieval
+│   │       ├── retell-webhook/       # Webhook handling
+│   │       └── practice-sessions/    # Session management
 │   ├── components/            # Reusable UI components
 │   │   ├── call/             # Voice interaction components
 │   │   ├── coding/           # Code editor components
 │   │   ├── dashboard/        # Dashboard components
-│   │   └── ui/               # Base UI components
+│   │   └── practice/         # Practice session components
 │   ├── contexts/             # React contexts for state management
 │   ├── lib/                  # Utility functions and configurations
 │   └── services/             # External service integrations
 ├── public/                   # Static assets
-│   ├── interviewers/        # Agent avatar images
+│   ├── interviewers/        # Interviewer avatar images
 │   └── audio/               # Audio assets
-└── supabase_schema.sql      # Database schema
+├── supabase/                # Database migrations
+└── docs/                    # Documentation
 ```
 
 ## 🔧 Platform Features
 
-### Agent Marketplace
+### Interview Dashboard
 Navigate to the **Dashboard** to:
-- Browse available voice agents
-- Filter by categories and capabilities
-- Test agents with live voice interactions
-- View detailed agent specifications
-- Access integration documentation
+- Upload job descriptions for question generation
+- Select AI interviewers for practice sessions
+- View recent practice sessions and scores
+- Access conversation logs and audio recordings
+- Track progress and improvement over time
 
-### Agent Management
-Manage your voice agents:
-- **Sync Retell Agents:** Import agents from your Retell AI account
-- **Custom Avatars:** Assign visual representations to agents
-- **Performance Tracking:** Monitor agent usage and effectiveness
-- **API Keys:** Generate and manage integration credentials
+### Practice Session Management
+Manage your interview practice:
+- **Question Generation:** AI creates personalized questions from job descriptions
+- **Session Continuation:** Resume interrupted practice sessions
+- **Progress Tracking:** Monitor improvement with detailed metrics
+- **Audio Playback:** Review interviews with full audio and transcript
+- **Performance Analysis:** Get comprehensive feedback and scoring
+
+### Conversation Logging
+Review your interview performance:
+- **Audio Recording:** Full interview audio with professional controls
+- **Transcript Review:** Detailed conversation logs with timestamps
+- **Performance Metrics:** Comprehensive scoring across multiple categories
+- **Session History:** Complete archive of all practice sessions
+- **Download Support:** Export audio and transcripts for offline review
 
 ### Development Tools
 The platform includes comprehensive development features:
-- **Live Testing Environment:** Test agents without external setup
+- **Live Testing Environment:** Test interviewers without external setup
 - **Code Integration:** Voice-enabled code review and analysis
 - **Webhook Management:** Real-time event notifications
 - **Analytics Dashboard:** Detailed usage and performance metrics
@@ -220,43 +254,53 @@ The platform can be deployed on any service supporting Next.js:
 - DigitalOcean App Platform
 - AWS Amplify
 
+## 📚 Documentation
+
+- **[Conversation Log Features](./CONVERSATION_LOG_FEATURES.md)** - Detailed guide to conversation logging and playback
+- **[Retell Integration Guide](./RETELL_VOICE_SETUP.md)** - Setup and configuration for Retell AI
+- **[API Documentation](./docs/api.md)** - Complete API reference
+- **[Database Schema](./supabase_schema.sql)** - Database structure and relationships
+
 ## 🤝 Contributing
 
-We welcome contributions to the AI Voice Agent Marketplace Platform!
+We welcome contributions to Roundly.AI!
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/marketplace-enhancement`
+2. Create a feature branch: `git checkout -b feature/interview-enhancement`
 3. Make your changes and add tests if applicable
-4. Commit your changes: `git commit -m 'Add marketplace feature'`
-5. Push to the branch: `git push origin feature/marketplace-enhancement`
+4. Commit your changes: `git commit -m 'Add interview feature'`
+5. Push to the branch: `git push origin feature/interview-enhancement`
 6. Submit a pull request
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Agents not loading:**
-- Verify Retell API key is valid
-- Check agent sync status in dashboard
-- Confirm Supabase connection
-
 **Voice interactions not working:**
 - Check microphone permissions
 - Verify Retell AI agent configuration
 - Test with different browsers
+- Ensure Retell API key is valid
 
-**Code analysis issues:**
+**Conversation logs not appearing:**
+- Verify webhook configuration
+- Check database connection
+- Review API response logs
+- Ensure proper authentication
+
+**Question generation issues:**
 - Confirm OpenAI API key is valid
-- Check code execution environment
-- Verify Monaco Editor integration
+- Check job description format
+- Verify API rate limits
+- Review error logs
 
 ## 🌟 Show Your Support
 
-If this AI Voice Agent Marketplace Platform helps your development, please ⭐ star this repository!
+If Roundly.AI helps your interview preparation, please ⭐ star this repository!
 
 ## 📞 Support & Contact
 
-- **Issues:** [GitHub Issues](https://github.com/your-username/AI-Voice-Agent-Marketplace-Platform/issues)
+- **Issues:** [GitHub Issues](https://github.com/JiawenZhu/Roundly.AI/issues)
 - **Documentation:** [Platform Docs](./docs)
 - **API Reference:** [API Documentation](./docs/api)
 
@@ -266,4 +310,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Built with ❤️ for the future of voice AI**
+**Built with ❤️ for the future of AI-powered interviews**

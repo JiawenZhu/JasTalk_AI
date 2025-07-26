@@ -288,7 +288,7 @@ async function executeJavaScriptCode(code: string, testCases?: Array<{input: str
     const vm = require('vm');
     
     // Mock console.log to capture output
-    const context = {
+    const context: { [key: string]: any } = {
       console: {
         log: (...args: any[]) => {
           const message = args.map(arg => 
@@ -410,8 +410,9 @@ async function runJavaScriptTestCases(code: string, testCases: Array<{input: str
             let result = null;
             
             for (const funcName of functionNames) {
-              if (context[funcName] && typeof context[funcName] === 'function') {
-                result = context[funcName](nums, target);
+              const func = (context as any)[funcName];
+              if (func && typeof func === 'function') {
+                result = func(nums, target);
                 break;
               }
             }
@@ -422,7 +423,7 @@ async function runJavaScriptTestCases(code: string, testCases: Array<{input: str
             }
           }
         } catch (testError) {
-          actual = `Test execution error: ${testError.message}`;
+          actual = `Test execution error: ${testError instanceof Error ? testError.message : 'Unknown error'}`;
         }
       }
       

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import React from "react";
 import { useAuth } from "@/contexts/auth.context";
-import { useOrganization } from "@/contexts/organization.context";
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { User, LogOut } from "lucide-react";
 import {
@@ -13,26 +14,37 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function Navbar() {
-  const { user, signOut } = useAuth();
-  const { organization, loading } = useOrganization();
+  const { user, signOut, getUserFullName, isAuthenticated } = useAuth();
+  const router = useRouter();
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      const result = await signOut();
+      if (result.success) {
+        // Redirect to sign-in page after successful logout
+        router.push('/sign-in');
+      } else {
+        console.error('Logout failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
-  // Get organization name with fallback for development
-  const getOrganizationName = () => {
-    if (organization?.name) {
-      return organization.name;
+  // Get user display name
+  const getUserDisplayName = () => {
+    const fullName = getUserFullName(user);
+    if (fullName) {
+      return fullName;
     }
     
-    // In development mode, show a default name instead of loading
-    if (process.env.NODE_ENV === 'development') {
-      return "Development Organization";
-    }
-    
-    return loading ? "Loading..." : "No Organization";
+    return user?.email?.split('@')[0] || 'User';
   };
+
+  // Don't render navbar if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-x-0 top-0 bg-slate-100 z-[10] h-fit py-4">
@@ -47,7 +59,7 @@ function Navbar() {
           <p className="my-auto text-xl">/</p>
           <div className="my-auto">
             <div className="px-3 py-1 text-sm bg-gray-200 rounded-md">
-              {getOrganizationName()}
+              {getUserDisplayName()}
             </div>
           </div>
         </div>
@@ -62,7 +74,7 @@ function Navbar() {
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user?.user_metadata?.avatar_url} />
                   <AvatarFallback>
-                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                    {getUserFullName(user).split(' ').map(n => n[0]).join('').toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -71,10 +83,10 @@ function Navbar() {
               <DropdownMenuItem className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">
-                    {user?.email || 'dev@example.com'}
+                    {user?.email}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {getOrganizationName()}
+                    {getUserDisplayName()}
                   </p>
                 </div>
               </DropdownMenuItem>

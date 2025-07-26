@@ -2,6 +2,7 @@ import React from "react";
 import "./globals.css";
 import { Metadata, Viewport } from "next";
 import { Inter } from 'next/font/google';
+import Providers from '@/components/providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -44,9 +45,11 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={inter.className}>
-        <main className="min-h-screen bg-[#F7F9FC]">
-          {children}
-        </main>
+        <Providers>
+          <main className="min-h-screen bg-[#F7F9FC]">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );

@@ -138,8 +138,9 @@ const getOrganizationById = async (
 
       if (insertError) {
         console.log("Error inserting organization:", insertError);
-        // Return fallback for development
+        // Return fallback for development - table might not exist
         if (process.env.NODE_ENV === 'development') {
+          console.log("Development mode: Using mock organization data");
           return {
             id: organization_id,
             name: organization_name || 'Development Organization',

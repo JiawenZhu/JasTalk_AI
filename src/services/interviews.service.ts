@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Initialize Supabase client lazily to avoid build-time errors
+let supabaseClient: any = null;
+
 const getSupabaseClient = () => {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
+  
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
@@ -9,17 +15,26 @@ const getSupabaseClient = () => {
     throw new Error("Missing Supabase configuration");
   }
   
-  return createClient(supabaseUrl, supabaseKey);
+  supabaseClient = createClient(supabaseUrl, supabaseKey);
+  
+  return supabaseClient;
 };
 
-const getAllInterviews = async (userId: string, organizationId: string) => {
+const getAllInterviews = async (userId: string) => {
   try {
     const supabase = getSupabaseClient();
     const { data: clientData, error: clientError } = await supabase
-      .from("interview")
+      .from("interviews")
       .select(`*`)
-      .or(`organization_id.eq.${organizationId},user_id.eq.${userId}`)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
+
+    // Handle missing table in development
+    if (clientError && process.env.NODE_ENV === 'development') {
+      console.log("Development mode: Using mock interviews data");
+      
+      return [];
+    }
 
     return [...(clientData || [])];
   } catch (error) {
@@ -33,28 +48,29 @@ const getInterviewById = async (id: string) => {
   try {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
-      .from("interview")
+      .from("interviews")
       .select(`*`)
-      .or(`id.eq.${id},readable_slug.eq.${id}`);
+      .eq("id", id)
+      .single();
 
-    return data ? data[0] : null;
+    return data;
   } catch (error) {
     console.log(error);
 
-    return [];
+    return null;
   }
 };
 
 const updateInterview = async (payload: any, id: string) => {
   const supabase = getSupabaseClient();
   const { error, data } = await supabase
-    .from("interview")
+    .from("interviews")
     .update({ ...payload })
     .eq("id", id);
   if (error) {
     console.log(error);
 
-    return [];
+    return null;
   }
 
   return data;
@@ -63,13 +79,13 @@ const updateInterview = async (payload: any, id: string) => {
 const deleteInterview = async (id: string) => {
   const supabase = getSupabaseClient();
   const { error, data } = await supabase
-    .from("interview")
+    .from("interviews")
     .delete()
     .eq("id", id);
   if (error) {
     console.log(error);
 
-    return [];
+    return null;
   }
 
   return data;
@@ -79,8 +95,8 @@ const getAllRespondents = async (interviewId: string) => {
   try {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
-      .from("interview")
-      .select(`respondents`)
+      .from("responses")
+      .select(`*`)
       .eq("interview_id", interviewId);
 
     return data || [];
@@ -95,11 +111,6 @@ const createInterview = async (payload: any) => {
   console.log('Creating interview with payload:', payload);
   
   // Validate required fields
-  if (!payload.organization_id) {
-    console.error('Error: Missing organization_id');
-    throw new Error('Missing organization_id');
-  }
-  
   if (!payload.user_id) {
     console.error('Error: Missing user_id');
     throw new Error('Missing user_id');
@@ -107,33 +118,30 @@ const createInterview = async (payload: any) => {
 
   const supabase = getSupabaseClient();
   const { error, data } = await supabase
-    .from("interview")
+    .from("interviews")
     .insert({ ...payload });
     
   if (error) {
     console.error('Database error creating interview:', error);
+    
+    // Handle missing table in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Development mode: Using mock interview creation");
+      
+      return [{
+        id: `mock-interview-${Date.now()}`,
+        ...payload,
+        created_at: new Date().toISOString()
+      }];
+    }
+    
     throw error;
   }
 
   return data;
 };
 
-const deactivateInterviewsByOrgId = async (organizationId: string) => {
-  try {
-    const supabase = getSupabaseClient();
-    const { error } = await supabase
-      .from("interview")
-      .update({ is_active: false })
-      .eq("organization_id", organizationId)
-      .eq("is_active", true); // Optional: only update if currently active
 
-    if (error) {
-      console.error("Failed to deactivate interviews:", error);
-    }
-  } catch (error) {
-    console.error("Unexpected error disabling interviews:", error);
-  }
-};
 
 export const InterviewService = {
   getAllInterviews,
@@ -142,5 +150,4 @@ export const InterviewService = {
   deleteInterview,
   getAllRespondents,
   createInterview,
-  deactivateInterviewsByOrgId,
 };

@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import Editor from '@monaco-editor/react';
+import dynamic from 'next/dynamic';
 import * as monaco from 'monaco-editor';
+
+// Dynamically import Monaco Editor to avoid SSR issues
+const Editor = dynamic(() => import('@monaco-editor/react'), {
+  ssr: false,
+  loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded"></div>
+});
 
 interface CodeEditorProps {
   language: string;
@@ -145,6 +151,24 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [windowDimensions, setWindowDimensions] = useState({ width: 1024, height: 768 });
+
+  // Handle window dimensions for SSR
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateDimensions = () => {
+        setWindowDimensions({
+          width: window.innerWidth,
+          height: window.innerHeight
+        });
+      };
+      
+      updateDimensions();
+      window.addEventListener('resize', updateDimensions);
+      
+      return () => window.removeEventListener('resize', updateDimensions);
+    }
+  }, []);
 
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
@@ -183,13 +207,17 @@ export default function CodeEditor({
     // Add custom key bindings for code execution
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       // Trigger code execution
-      window.dispatchEvent(new CustomEvent('executeCode'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('executeCode'));
+      }
     });
 
     // Add custom key bindings for code submission
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
       // Trigger code submission
-      window.dispatchEvent(new CustomEvent('submitCode'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('submitCode'));
+      }
     });
   };
 
@@ -281,7 +309,7 @@ export default function CodeEditor({
             fontSize: 14,
             lineHeight: 20,
             fontFamily: 'JetBrains Mono, Monaco, Consolas, "Courier New", monospace',
-            minimap: { enabled: window.innerWidth > 1024 }, // Disable minimap on smaller screens
+            minimap: { enabled: windowDimensions.width > 1024 }, // Disable minimap on smaller screens
             scrollBeyondLastLine: false,
             automaticLayout: true,
             wordWrap: 'on',
@@ -304,8 +332,8 @@ export default function CodeEditor({
             wordBasedSuggestions: 'allDocuments',
             // Mobile optimizations
             glyphMargin: false,
-            folding: window.innerWidth > 768,
-            overviewRulerLanes: window.innerWidth > 768 ? 3 : 0,
+            folding: windowDimensions.width > 768,
+            overviewRulerLanes: windowDimensions.width > 768 ? 3 : 0,
           }}
           loading={
             <div className="flex items-center justify-center h-full">

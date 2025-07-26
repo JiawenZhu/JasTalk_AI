@@ -1,326 +1,439 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
-import { useOrganization } from "@/contexts/organization.context";
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { 
+  CloudArrowUpIcon, 
+  DocumentTextIcon, 
+  ClockIcon, 
+  ChartBarIcon,
+  MicrophoneIcon,
+  CameraIcon,
+  PhotoIcon,
+  DocumentIcon,
+  PlusIcon
+} from "@heroicons/react/24/outline";
 import { useAuth } from "@/contexts/auth.context";
-import InterviewCard from "@/components/dashboard/interview/interviewCard";
-import CreateInterviewCard from "@/components/dashboard/interview/createInterviewCard";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { InterviewService } from "@/services/interviews.service";
-import { ClientService } from "@/services/clients.service";
-import { ResponseService } from "@/services/responses.service";
-import { useInterviews } from "@/contexts/interviews.context";
-import Modal from "@/components/dashboard/Modal";
-import { WelcomeModal } from "@/components/onboarding/welcome-modal";
-import { InterviewCardSkeleton, ImageSkeleton } from "@/components/ui/loading-states";
-import { Gem, Plus } from "lucide-react";
-import Image from "next/image";
-import { useInterviewers } from "@/contexts/interviewers.context";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Interview } from "@/types/interview";
-import CreateInterviewModal from "@/components/dashboard/interview/createInterviewModal";
-import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/use-toast";
 
-// Force dynamic rendering to avoid prerendering issues
-export const dynamic = 'force-dynamic';
+interface VoiceAgent {
+  agent_id: string;
+  name: string;
+  description: string;
+  voice_id: string;
+  category: string;
+  difficulty: string;
+  specialties: string[];
+}
 
-// Memoized loading component with exact dimensions
-const InterviewsLoader = memo(() => {
-  return (
-    <div className="flex flex-row gap-3">
-      {[...Array(3)].map((_, index) => (
-        <InterviewCardSkeleton key={index} />
-      ))}
-    </div>
-  );
-});
+interface PracticeSession {
+  id: string;
+  title: string;
+  type: string;
+  score: number;
+  date: string;
+  questionCount: number;
+}
 
-InterviewsLoader.displayName = "InterviewsLoader";
+export default function Dashboard() {
+  const { user, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const [selectedAgent, setSelectedAgent] = useState<VoiceAgent | null>(null);
+  const [recentSessions, setRecentSessions] = useState<PracticeSession[]>([
+    {
+      id: "1",
+      title: "Software Engineer - Google",
+      type: "Technical Interview",
+      score: 85,
+      date: "2024-01-15",
+      questionCount: 10
+    },
+    {
+      id: "2", 
+      title: "Product Manager - Meta",
+      type: "Behavioral Interview",
+      score: 78,
+      date: "2024-01-14",
+      questionCount: 8
+    }
+  ]);
 
-// Memoized upgrade modal content with stable image loading
-const UpgradeModalContent = memo(() => (
-  <div className="flex flex-col space-y-4">
-    <div className="flex justify-center text-indigo-600">
-      <Gem />
-    </div>
-    <h3 className="text-xl font-semibold text-center">
-      Upgrade to Pro
-    </h3>
-    <p className="text-l text-center">
-      You have reached your limit for the free trial. Please
-      upgrade to pro to continue using our features.
-    </p>
-    <div className="grid grid-cols-2 gap-2">
-      <div className="flex justify-center items-center">
-        <div className="relative w-[299px] h-[300px] bg-gray-50 rounded-lg overflow-hidden">
-          <Image
-            src="/premium-plan-icon.png"
-            alt="Premium Plan"
-            className="object-contain"
-            sizes="(max-width: 768px) 150px, 299px"
-            priority={false}
-            placeholder="blur"
-            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyLliDGhQpqRXrZZbKWEhYAQCm4xdVG4U4wKN2kR9rA5b/9k="
-            fill
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-rows-2 gap-2">
-        <div className="p-4 border rounded-lg bg-white">
-          <h4 className="text-lg font-medium">Free Plan</h4>
-          <ul className="list-disc pl-5 mt-2">
-            <li>10 Responses</li>
-            <li>Basic Support</li>
-            <li>Limited Features</li>
-          </ul>
-        </div>
-        <div className="p-4 border rounded-lg bg-white">
-          <h4 className="text-lg font-medium">Pro Plan</h4>
-          <ul className="list-disc pl-5 mt-2">
-            <li>Flexible Pay-Per-Response</li>
-            <li>Priority Support</li>
-            <li>All Features</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <p className="text-l text-center">
-      Contact{" "}
-      <span className="font-semibold">founders@folo-up.co</span>{" "}
-      to upgrade your plan.
-    </p>
-  </div>
-));
-
-UpgradeModalContent.displayName = "UpgradeModalContent";
-
-// Memoized create interview disabled card with stable dimensions
-const CreateInterviewDisabledCard = memo(() => (
-  <Card className="create-card flex items-center border-dashed border-gray-700 border-2 ml-1 mr-3 mt-4 shrink-0 overflow-hidden shadow-md">
-    <CardContent className="flex items-center flex-col mx-auto p-6">
-      <div className="flex flex-col justify-center items-center w-full overflow-hidden mb-4">
-        <Plus size={90} strokeWidth={0.5} className="text-gray-700" />
-      </div>
-      <CardTitle className="p-0 text-md text-center leading-tight">
-        You cannot create any more interviews unless you upgrade
-      </CardTitle>
-    </CardContent>
-  </Card>
-));
-
-CreateInterviewDisabledCard.displayName = "CreateInterviewDisabledCard";
-
-// Main dashboard component
-function Interviews() {
-  const { interviews, interviewsLoading, fetchInterviews } = useInterviews();
-  const { organization } = useOrganization();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState<boolean>(false);
-  const [currentPlan, setCurrentPlan] = useState<string>("");
-  const [allowedResponsesCount, setAllowedResponsesCount] = useState<number>(10);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
-  const [contentReady, setContentReady] = useState<boolean>(false);
-
-  // Memoized values for better performance
-  const isTrialOver = useMemo(() => currentPlan === "free_trial_over", [currentPlan]);
-  const shouldShowLoader = useMemo(() => interviewsLoading || loading, [interviewsLoading, loading]);
-
-  // Set content ready after initial load
   useEffect(() => {
-    if (!interviewsLoading) {
-      const timer = setTimeout(() => {
-        setContentReady(true);
-      }, 100);
-      
-return () => clearTimeout(timer);
+    if (!isAuthenticated) {
+      router.push('/sign-in');
     }
-  }, [interviewsLoading]);
+  }, [isAuthenticated, router]);
 
-  // Memoized onboarding check
-  const checkOnboarding = useCallback(() => {
-    // Multiple checks to determine if this is a first-time user
-    const hasSeenOnboarding = localStorage.getItem('foloup-onboarding-completed');
-    const hasExistingInterviews = interviews && interviews.length > 0;
-    const lastLoginTime = localStorage.getItem('foloup-last-login');
-    const currentTime = Date.now();
-    
-    // Check if user has been active recently (within last 7 days)
-    const isRecentUser = lastLoginTime && 
-      (currentTime - parseInt(lastLoginTime)) < (7 * 24 * 60 * 60 * 1000);
-    
-    // Set current login time
-    localStorage.setItem('foloup-last-login', currentTime.toString());
-    
-    // Only show onboarding if:
-    // 1. Haven't seen onboarding before AND
-    // 2. Have no existing interviews AND 
-    // 3. Not a recent user AND
-    // 4. User is loaded and interviews are loaded
-    const shouldShowOnboarding = !hasSeenOnboarding && 
-                                !hasExistingInterviews && 
-                                !isRecentUser && 
-                                user && 
-                                !interviewsLoading;
-    
-    if (shouldShowOnboarding) {
-      // Show welcome modal after a short delay for better UX
-      const timer = setTimeout(() => {
-        setShowWelcomeModal(true);
-      }, 1000);
-      
-return () => clearTimeout(timer);
-    }
-  }, [user, interviewsLoading, interviews]);
-
-  // Memoized organization data fetch
-  const fetchOrganizationData = useCallback(async () => {
-    if (!organization?.id) {return;}
-    
-    try {
-      const data = await ClientService.getOrganizationById(organization.id);
-      if (data?.plan) {
-        setCurrentPlan(data.plan);
-        if (data.plan === "free_trial_over") {
-          setIsModalOpen(true);
-        }
+  // Load selected agent from localStorage
+  useEffect(() => {
+    const storedAgent = localStorage.getItem('selectedDashboardAgent');
+    if (storedAgent) {
+      try {
+        const agent = JSON.parse(storedAgent);
+        setSelectedAgent(agent);
+      } catch (error) {
+        console.error('Error parsing stored dashboard agent:', error);
       }
-      if (data?.allowed_responses_count) {
-        setAllowedResponsesCount(data.allowed_responses_count);
-      }
-    } catch (error) {
-      console.error("Error fetching organization data:", error);
     }
-  }, [organization?.id]);
-
-  // Memoized responses count fetch
-  const fetchResponsesCount = useCallback(async () => {
-    if (!organization || currentPlan !== "free") {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const totalResponses = await ResponseService.getResponseCountByOrganizationId(
-        organization.id,
-      );
-      const hasExceededLimit = totalResponses >= allowedResponsesCount;
-      if (hasExceededLimit) {
-        setCurrentPlan("free_trial_over");
-        await Promise.all([
-          InterviewService.deactivateInterviewsByOrgId(organization.id),
-          ClientService.updateOrganization(
-            { plan: "free_trial_over" },
-            organization.id,
-          ),
-        ]);
-      }
-    } catch (error) {
-      console.error("Error fetching responses:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [organization, currentPlan, allowedResponsesCount]);
-
-  // Memoized modal close handler
-  const handleModalClose = useCallback(() => {
-    setIsModalOpen(false);
   }, []);
 
-  const handleWelcomeModalClose = useCallback(() => {
-    setShowWelcomeModal(false);
-  }, []);
+  const handleUploadDocument = () => {
+    router.push('/upload');
+  };
 
-  // Effects with proper dependencies
-  useEffect(() => {
-    checkOnboarding();
-  }, [checkOnboarding]);
+  const handlePasteText = () => {
+    router.push('/upload?mode=text');
+  };
 
-  useEffect(() => {
-    fetchOrganizationData();
-  }, [fetchOrganizationData]);
+  const handleContinuePractice = () => {
+    if (selectedAgent) {
+      // Store the selected agent for the practice session
+      localStorage.setItem('selectedPracticeAgent', JSON.stringify(selectedAgent));
+      router.push('/practice/new');
+    } else {
+      // If no agent is selected, go to interviewers page first
+      toast({
+        title: "Select an Interviewer",
+        description: "Please select an interviewer first to continue practice.",
+      });
+      router.push('/dashboard/interviewers');
+    }
+  };
 
-  useEffect(() => {
-    fetchResponsesCount();
-  }, [fetchResponsesCount]);
+  const handleViewProgress = () => {
+    router.push('/analytics');
+  };
 
-  // Memoized interview cards
-  const interviewCards = useMemo(() => {
-    return interviews.map((item) => (
-      <InterviewCard
-        id={item.id}
-        interviewerId={item.interviewer_id}
-        key={item.id}
-        name={item.name}
-        url={item.url ?? ""}
-        readableSlug={item.readable_slug}
-        hasCodingQuestions={item.has_coding_questions}
-        codingQuestionCount={item.coding_question_count}
-        showDeleteButton={true}
-        onDeleted={(deletedId) => {
-          fetchInterviews();
-        }}
-      />
-    ));
-  }, [interviews, fetchInterviews]);
+  const handleChangeAgent = () => {
+    router.push('/dashboard/interviewers');
+  };
+
+  const createTestLog = async () => {
+    try {
+      const response = await fetch('/api/test-create-log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          call_id: `test_call_${Date.now()}`,
+          agent_name: 'Test Interviewer'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create test log');
+      }
+
+      const data = await response.json();
+      toast({
+        title: "Test Log Created",
+        description: "A test conversation log has been created successfully.",
+      });
+      
+      console.log('Test log created:', data);
+    } catch (error) {
+      console.error('Error creating test log:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create test log. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) {
+      return "text-green-600";
+    }
+    if (score >= 60) {
+      return "text-yellow-600";
+    }
+
+    return "text-red-600";
+  };
+
+  const getScoreGrade = (score: number) => {
+    if (score >= 90) {
+      return "A";
+    }
+    if (score >= 80) {
+      return "B";
+    }
+    if (score >= 70) {
+      return "C";
+    }
+    if (score >= 60) {
+      return "D";
+    }
+
+    return "F";
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className={`dashboard-container p-8 pt-0 ml-12 mr-auto rounded-md route-container transition-all duration-200 ${
-      contentReady ? 'content-container ready' : 'content-container'
-    }`}>
-      <div className="flex flex-col items-left">
-        <div className={`transition-opacity duration-300 ${contentReady ? 'opacity-100' : 'opacity-0'}`}>
-          <h2 className="mr-2 text-2xl font-semibold tracking-tight mt-8">
-            My Interviews
-          </h2>
-          <h3 className="text-sm tracking-tight text-gray-600 font-medium">
-            Start getting responses now!
-          </h3>
-        </div>
-        
-        <div className={`dashboard-grid relative mt-4 transition-all duration-300 ${
-          contentReady ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-2'
-        }`}>
-          {/* Always render the create card or disabled card to maintain layout */}
-          {isTrialOver ? (
-            <CreateInterviewDisabledCard />
-          ) : (
-            <div className="create-card-wrapper">
-              <CreateInterviewCard />
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">F</span>
             </div>
-          )}
-          
-          {/* Content area with stable dimensions */}
-          <div className="flex flex-wrap gap-3 async-content">
-            {shouldShowLoader ? (
-              <InterviewsLoader />
-            ) : (
-              <div className="transition-all duration-200">
-                {interviewCards}
-              </div>
-            )}
+            <h1 className="text-lg font-semibold text-gray-900">FoloUp</h1>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+              <span className="text-gray-600 text-sm font-medium">
+                {user?.user_metadata?.first_name?.[0] || user?.email?.[0] || 'U'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Modals */}
-      {isModalOpen && (
-        <Modal open={isModalOpen} onClose={handleModalClose}>
-          <UpgradeModalContent />
-        </Modal>
+      {/* Hero Section */}
+      <div className="px-4 py-6 bg-gradient-to-br from-blue-600 to-blue-700">
+        <div className="text-center text-white">
+          <h2 className="text-2xl font-bold mb-2">Master your interviews</h2>
+          <p className="text-blue-100 mb-6">
+            Upload job descriptions, get personalized questions, and improve your skills
+          </p>
+          <motion.button
+            className="w-full bg-white text-blue-600 font-semibold py-3 px-6 rounded-xl shadow-lg"
+            whileTap={{ scale: 0.95 }}
+            onClick={handleUploadDocument}
+          >
+            Start Practice Interview
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Selected Agent Section */}
+      {selectedAgent && (
+        <div className="px-4 py-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+                  <span className="text-lg font-semibold text-blue-600">
+                    {selectedAgent.name.charAt(0)}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900">Your Interviewer</h3>
+                  <p className="text-sm text-gray-600">{selectedAgent.name}</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                      {selectedAgent.category}
+                    </span>
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                      {selectedAgent.difficulty}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                className="text-sm text-blue-600 hover:text-blue-700 underline"
+                onClick={handleChangeAgent}
+              >
+                Change
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Welcome Modal */}
-      <WelcomeModal 
-        isOpen={showWelcomeModal} 
-        userName={user?.email}
-        onClose={handleWelcomeModalClose}
-      />
-    </main>
+      {/* Quick Actions Grid */}
+      <div className="px-4 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* Upload Document */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handleUploadDocument}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <CloudArrowUpIcon className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">Upload Job Description</span>
+            </div>
+          </motion.div>
+
+          {/* Paste Text */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handlePasteText}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <DocumentTextIcon className="w-6 h-6 text-green-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">Paste Job Description</span>
+            </div>
+          </motion.div>
+
+          {/* Continue Practice */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handleContinuePractice}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <ClockIcon className="w-6 h-6 text-purple-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">Continue Practice</span>
+            </div>
+          </motion.div>
+
+          {/* View Progress */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handleViewProgress}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <ChartBarIcon className="w-6 h-6 text-orange-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">My Progress</span>
+            </div>
+          </motion.div>
+
+          {/* View Logs */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={() => router.push('/practice/logs')}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <DocumentTextIcon className="w-6 h-6 text-indigo-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">View Logs</span>
+            </div>
+          </motion.div>
+
+                  {/* Test Logs */}
+        <motion.div
+          whileTap={{ scale: 0.95 }}
+          className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+          onClick={() => router.push('/test-logs')}
+        >
+          <div className="flex flex-col items-center text-center space-y-2">
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <DocumentTextIcon className="w-6 h-6 text-yellow-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-900">Test Logs</span>
+          </div>
+        </motion.div>
+
+        {/* Create Test Log */}
+        <motion.div
+          whileTap={{ scale: 0.95 }}
+          className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+          onClick={createTestLog}
+        >
+          <div className="flex flex-col items-center text-center space-y-2">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <PlusIcon className="w-6 h-6 text-green-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-900">Create Test Log</span>
+          </div>
+        </motion.div>
+        </div>
+      </div>
+
+      {/* Recent Activity Section */}
+      <div className="px-4 pb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Recent Practice Sessions</h3>
+          </div>
+          
+          {recentSessions.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {recentSessions.map((session) => (
+                <div key={session.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-medium text-gray-900 truncate">
+                        {session.title}
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {session.type} • {session.questionCount} questions
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(session.date).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className={`text-sm font-bold ${getScoreColor(session.score)}`}>
+                        {session.score}%
+                      </div>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                        session.score >= 80 ? 'bg-green-100 text-green-600' :
+                        session.score >= 60 ? 'bg-yellow-100 text-yellow-600' :
+                        'bg-red-100 text-red-600'
+                      }`}>
+                        {getScoreGrade(session.score)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <MicrophoneIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">No practice sessions yet</p>
+              <p className="text-gray-400 text-xs mt-1">Start your first interview practice</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="px-4 pb-6">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-blue-600">{recentSessions.length}</div>
+            <div className="text-xs text-gray-500">Sessions</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-green-600">
+              {recentSessions.length > 0 
+                ? Math.round(recentSessions.reduce((acc, s) => acc + s.score, 0) / recentSessions.length)
+                : 0
+              }%
+            </div>
+            <div className="text-xs text-gray-500">Avg Score</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-purple-600">
+              {recentSessions.length > 0 
+                ? recentSessions.reduce((acc, s) => acc + s.questionCount, 0)
+                : 0
+              }
+            </div>
+            <div className="text-xs text-gray-500">Questions</div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
-
-// Export memoized component
-export default memo(Interviews);

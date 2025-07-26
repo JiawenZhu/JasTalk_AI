@@ -6,32 +6,50 @@ const publicRoutes = [
   '/',
   '/sign-in',
   '/sign-up',
-  '/interview',
-  '/call',
-  '/dashboard', // Temporarily make dashboard public
-  '/premium',   // Add premium page
-  '/demo',      // Add demo page
+  '/forgot-password',
+  '/auth/callback',
+  '/auth/reset-password',
+  '/demo',
+  '/premium',
+  '/questions',
+  '/coding-demo',
+  '/voice-demo',
   '/api/register-call',
+  '/api/register-practice-call',
   '/api/get-call',
   '/api/generate-interview-questions',
   '/api/create-interviewer',
   '/api/analyze-communication',
+  '/api/upload-document',
+  '/api/generate-questions',
+  '/api/analyze-response',
 ]
 
-const protectedRoutes: string[] = [
-  // Temporarily disable protected routes for setup
-  // '/dashboard',
+const protectedRoutes = [
+  '/dashboard',
+  '/interviews',
+  '/call',
+  '/upload',
+  '/practice',
+  '/analytics',
+  '/api/create-interview',
+  '/api/delete-interview',
+  '/api/manage-agents',
+  '/api/sync-retell-agents',
+  '/api/audit-agents',
+  '/api/execute-code',
+  '/api/submit-code',
+  '/api/analyze-code',
+  '/api/retell-code-review',
+  '/api/retell-webhook',
+  '/api/response-webhook',
+  '/api/generate-insights',
+  '/api/seed-coding-questions',
+  '/api/create-simple-coding-question',
 ]
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  
-  // Temporarily disable authentication checks for development
-  const isDevelopment = process.env.NODE_ENV === 'development'
-  
-  if (isDevelopment) {
-    return res
-  }
   
   const supabase = createMiddlewareClient({ req, res })
 
@@ -56,16 +74,17 @@ export async function middleware(req: NextRequest) {
   if (!session && isProtectedRoute) {
     const redirectUrl = req.nextUrl.clone()
     redirectUrl.pathname = '/sign-in'
+    redirectUrl.searchParams.set('redirect', pathname)
     
-return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // If user is signed in and trying to access auth pages, redirect to dashboard
-  if (session && (pathname === '/sign-in' || pathname === '/sign-up')) {
+  if (session && (pathname === '/sign-in' || pathname === '/sign-up' || pathname === '/forgot-password')) {
     const redirectUrl = req.nextUrl.clone()
     redirectUrl.pathname = '/dashboard'
     
-return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(redirectUrl)
   }
 
   return res

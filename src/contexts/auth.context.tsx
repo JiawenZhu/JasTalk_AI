@@ -1,17 +1,25 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@/lib/supabase';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { authService, AuthResponse, SignUpData, SignInData, PasswordResetData, UpdateProfileData } from '@/services/auth.service';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string, options?: { data?: any }) => Promise<any>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<any>;
+  isAuthenticated: boolean;
+  signIn: (data: SignInData) => Promise<AuthResponse>;
+  signUp: (data: SignUpData) => Promise<AuthResponse>;
+  signInWithOAuth: (provider: 'google' | 'github' | 'discord') => Promise<AuthResponse>;
+  signOut: () => Promise<AuthResponse>;
+  resetPassword: (data: PasswordResetData) => Promise<AuthResponse>;
+  updatePassword: (newPassword: string) => Promise<AuthResponse>;
+  updateProfile: (data: UpdateProfileData) => Promise<AuthResponse>;
+  getUserFullName: (user: User | null) => string;
+  getUserInitials: (user: User | null) => string;
+  refreshSession: () => Promise<void>;
+  handleAuthCallback: () => Promise<AuthResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,7 +29,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const supabase = createClient();
+
+  const isAuthenticated = !!user && !!session;
+
+  // Initialize auth state
+  const initializeAuth = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Get current session
+      const { session: currentSession, error: sessionError } = await authService.getSession();
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+      }
+
+      // Get current user
+      const { user: currentUser, error: userError } = await authService.getUser();
+      if (userError) {
+        console.error('User error:', userError);
+      }
+
+      setSession(currentSession);
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Refresh session
+  const refreshSession = useCallback(async () => {
+    await initializeAuth();
+  }, [initializeAuth]);
 
   useEffect(() => {
     setMounted(true);
@@ -30,51 +70,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
 
-    const getInitialSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('Error getting session:', error);
-        } else {
-          setSession(session);
-          setUser(session?.user ?? null);
-        }
-        
-        // For development: create a test user if no session exists
-        if (!session && process.env.NODE_ENV === 'development') {
-          const testUser = {
-            id: 'test-user-123',
-            email: 'test@example.com',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            email_confirmed_at: new Date().toISOString(),
-            app_metadata: {},
-            user_metadata: {},
-            aud: 'authenticated',
-            role: 'authenticated'
-          } as User;
-          setUser(testUser);
-        }
-      } catch (error) {
-        console.error('Supabase auth error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    initializeAuth();
 
-    getInitialSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    // Listen for auth state changes
+    const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Handle specific auth events
+        switch (event) {
+          case 'SIGNED_IN':
+            console.log('User signed in:', session?.user?.email);
+            break;
+          case 'SIGNED_OUT':
+            console.log('User signed out');
+            break;
+          case 'TOKEN_REFRESHED':
+            console.log('Token refreshed');
+            break;
+          case 'USER_UPDATED':
+            console.log('User updated:', session?.user?.email);
+            break;
+        }
       }
     );
 
     return () => subscription.unsubscribe();
-  }, [supabase, mounted]);
+  }, [mounted, initializeAuth]);
 
   // Don't render until mounted to prevent hydration mismatch
   if (!mounted) {
@@ -83,50 +109,97 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: null,
         session: null,
         loading: true,
-        signIn: async () => ({}),
-        signUp: async () => ({}),
-        signOut: async () => {},
-        resetPassword: async () => ({})
+        isAuthenticated: false,
+        signIn: async () => ({ success: false, error: 'Not mounted' }),
+        signUp: async () => ({ success: false, error: 'Not mounted' }),
+        signInWithOAuth: async () => ({ success: false, error: 'Not mounted' }),
+        signOut: async () => ({ success: false, error: 'Not mounted' }),
+        resetPassword: async () => ({ success: false, error: 'Not mounted' }),
+        updatePassword: async () => ({ success: false, error: 'Not mounted' }),
+        updateProfile: async () => ({ success: false, error: 'Not mounted' }),
+        getUserFullName: () => '',
+        getUserInitials: () => '',
+        refreshSession: async () => {},
+        handleAuthCallback: async () => ({ success: false, error: 'Not mounted' })
       }}>
         {children}
       </AuthContext.Provider>
     );
   }
 
-  const signIn = async (email: string, password: string) => {
-    const result = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+  const signIn = async (data: SignInData): Promise<AuthResponse> => {
+    const result = await authService.signIn(data);
+    if (result.success) {
+      // Update local state immediately
+      const { session: currentSession, user: currentUser } = result.data;
+      setSession(currentSession);
+      setUser(currentUser);
+    }
     return result;
   };
 
-  const signUp = async (email: string, password: string, options?: { data?: any }) => {
-    const result = await supabase.auth.signUp({
-      email,
-      password,
-      options,
-    });
+  const signUp = async (data: SignUpData): Promise<AuthResponse> => {
+    return await authService.signUp(data);
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'github' | 'discord'): Promise<AuthResponse> => {
+    return await authService.signInWithOAuth(provider);
+  };
+
+  const signOut = async (): Promise<AuthResponse> => {
+    const result = await authService.signOut();
+    if (result.success) {
+      // Clear local state immediately
+      setUser(null);
+      setSession(null);
+    }
     return result;
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const resetPassword = async (data: PasswordResetData): Promise<AuthResponse> => {
+    return await authService.resetPassword(data);
   };
 
-  const resetPassword = async (email: string) => {
-    const result = await supabase.auth.resetPasswordForEmail(email);
+  const updatePassword = async (newPassword: string): Promise<AuthResponse> => {
+    return await authService.updatePassword(newPassword);
+  };
+
+  const updateProfile = async (data: UpdateProfileData): Promise<AuthResponse> => {
+    const result = await authService.updateProfile(data);
+    if (result.success && result.data?.user) {
+      setUser(result.data.user);
+    }
     return result;
+  };
+
+  const getUserFullName = (user: User | null): string => {
+    return authService.getUserFullName(user);
+  };
+
+  const getUserInitials = (user: User | null): string => {
+    return authService.getUserInitials(user);
+  };
+
+  const handleAuthCallback = async (): Promise<AuthResponse> => {
+    return await authService.handleAuthCallback();
   };
 
   const value = {
     user,
     session,
     loading,
+    isAuthenticated,
     signIn,
     signUp,
+    signInWithOAuth,
     signOut,
     resetPassword,
+    updatePassword,
+    updateProfile,
+    getUserFullName,
+    getUserInitials,
+    refreshSession,
+    handleAuthCallback,
   };
 
   return (
