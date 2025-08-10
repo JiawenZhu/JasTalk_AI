@@ -47,15 +47,28 @@ export async function GET(request: NextRequest) {
 
     try {
       // Fetch call data from Retell API
-      const callData = await retellClient.call.retrieve(callId);
-      
+      const callData: any = await retellClient.call.retrieve(callId);
+
+      // Build an easy-to-consume transcript timeline (agent/user with start times)
+      let transcriptTimeline: Array<{ speaker: string; text: string; ts_sec: number }> = [];
+      if (Array.isArray(callData.transcript_object)) {
+        transcriptTimeline = callData.transcript_object.map((m: any) => ({
+          speaker: m.role === 'user' ? 'user' : 'agent',
+          text: m.content || '',
+          ts_sec: Array.isArray(m.words) && m.words.length > 0 ? Number(m.words[0]?.start || 0) : 0
+        }));
+      }
+
       if (callData.recording_url) {
         return NextResponse.json({
-          audio_url: callData.recording_url,
+          audio_url: callData.recording_url, // Usually WAV; HTML audio supports it
           call_id: callId,
           status: 'completed',
           duration: callData.duration_seconds,
-          public_log_url: callData.public_log_url
+          public_log_url: callData.public_log_url,
+          transcript: callData.transcript || null,
+          transcript_object: callData.transcript_object || null,
+          transcript_timeline: transcriptTimeline
         });
       } else {
         // Check if call is still processing
@@ -64,14 +77,20 @@ export async function GET(request: NextRequest) {
             audio_url: null,
             call_id: callId,
             status: 'processing',
-            message: 'Audio recording is still being processed by Retell'
+            message: 'Audio recording is still being processed by Retell',
+            transcript: callData.transcript || null,
+            transcript_object: callData.transcript_object || null,
+            transcript_timeline: transcriptTimeline
           });
         } else {
           return NextResponse.json({
             audio_url: null,
             call_id: callId,
             status: 'not_ready',
-            message: 'Call is still in progress or not yet ended'
+            message: 'Call is still in progress or not yet ended',
+            transcript: callData.transcript || null,
+            transcript_object: callData.transcript_object || null,
+            transcript_timeline: transcriptTimeline
           });
         }
       }

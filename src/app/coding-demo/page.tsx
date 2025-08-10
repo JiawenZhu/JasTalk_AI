@@ -420,7 +420,8 @@ export default function CodingDemoPage() {
       
       if (!code || code.trim().length === 0) {
         toast.error('Please write some code first before requesting analysis');
-        return;
+        
+return;
       }
       
       // Show immediate feedback
@@ -519,7 +520,8 @@ export default function CodingDemoPage() {
   const startVoiceInterview = async () => {
     if (!selectedAgent) {
       toast.error('Please select a voice agent first');
-      return;
+      
+return;
     }
 
     try {
@@ -535,7 +537,7 @@ export default function CodingDemoPage() {
         interview_type: 'coding_demo'
       };
 
-      console.log('Registering call with data:', dynamicData);
+      console.log('Registering call with dynamic data');
 
       // Register the call with Retell AI
       const registerCallResponse = await axios.post('/api/register-call', {
@@ -543,7 +545,7 @@ export default function CodingDemoPage() {
         interviewer_id: selectedAgent.id
       });
 
-      console.log('Register call response:', registerCallResponse.data);
+      console.log('Register call response received');
 
       if (registerCallResponse.data.registerCallResponse.access_token) {
         console.log('Starting web call with access token');
@@ -588,9 +590,7 @@ export default function CodingDemoPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                FoloUp Coding Environment Demo
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-4">JasTalk AI Coding Environment Demo</h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Experience our AI-powered coding interview platform with voice interaction
               </p>
@@ -603,8 +603,8 @@ export default function CodingDemoPage() {
               </label>
               <select
                 value={selectedProblem}
-                onChange={(e) => setSelectedProblem(e.target.value)}
                 className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                onChange={(e) => setSelectedProblem(e.target.value)}
               >
                 {Object.entries(DEMO_PROBLEMS).map(([key, problem]) => (
                   <option key={key} value={key}>
@@ -639,11 +639,11 @@ export default function CodingDemoPage() {
                     <>
                       <select
                         value={selectedAgent?.id || ''}
+                        className="bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         onChange={(e) => {
                           const agent = voiceAgents.find(a => a.id === parseInt(e.target.value));
                           setSelectedAgent(agent || null);
                         }}
-                        className="bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select Voice Agent</option>
                         {voiceAgents.map((agent) => (
@@ -654,9 +654,9 @@ export default function CodingDemoPage() {
                       </select>
                       
                       <Button
-                        onClick={startVoiceInterview}
                         disabled={!selectedAgent}
                         className="bg-blue-600 hover:bg-blue-700"
+                        onClick={startVoiceInterview}
                       >
                         <Mic className="w-4 h-4 mr-2" />
                         Start Voice Interview
@@ -670,9 +670,9 @@ export default function CodingDemoPage() {
                         No voice agents found. Make sure you have voice-enabled agents in Retell AI.
                       </p>
                       <Button
-                        onClick={fetchVoiceAgents}
                         variant="outline"
                         className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                        onClick={fetchVoiceAgents}
                       >
                         Sync Voice Agents
                       </Button>
@@ -740,9 +740,9 @@ export default function CodingDemoPage() {
                 </div>
                 {isCalling && (
                   <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
                   </div>
                 )}
               </div>
@@ -754,10 +754,10 @@ export default function CodingDemoPage() {
                   </Badge>
                 )}
                 <Button
-                  onClick={stopVoiceInterview}
                   variant="outline"
                   size="sm"
                   className="border-green-300 text-green-600 hover:bg-green-50"
+                  onClick={stopVoiceInterview}
                 >
                   <PhoneOff className="w-4 h-4 mr-2" />
                   End Interview

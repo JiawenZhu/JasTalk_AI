@@ -1,5 +1,6 @@
 "use client";
 
+import "../../../globals.css";
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -14,6 +15,7 @@ import {
 import { Share2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import SharePracticePopup from "@/components/practice/sharePracticePopup";
+import Navbar from "@/components/navbar";
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +149,7 @@ export default function SharedPracticeInterviewPage({
       }
 
       const data = await response.json();
-      console.log('Practice call registered:', data);
+      console.log('Practice call registered successfully');
 
       // Update session with call details
       setSession(prev => prev ? {
@@ -371,7 +373,10 @@ export default function SharedPracticeInterviewPage({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Navigation Bar */}
+      <Navbar />
+      
+      {/* Page Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
@@ -395,7 +400,7 @@ export default function SharedPracticeInterviewPage({
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 pt-24 sm:pt-20">
         {/* Interview Status */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-center space-y-4">

@@ -76,6 +76,8 @@ export interface Database {
           completed_questions: number | null
           agent_id: string | null
           agent_name: string | null
+          retell_agent_id: string | null
+          retell_call_id: string | null
           metadata: Json | null
         }
         Insert: {
@@ -94,6 +96,8 @@ export interface Database {
           completed_questions?: number | null
           agent_id?: string | null
           agent_name?: string | null
+          retell_agent_id?: string | null
+          retell_call_id?: string | null
           metadata?: Json | null
         }
         Update: {
@@ -112,6 +116,8 @@ export interface Database {
           completed_questions?: number | null
           agent_id?: string | null
           agent_name?: string | null
+          retell_agent_id?: string | null
+          retell_call_id?: string | null
           metadata?: Json | null
         }
       }
@@ -359,6 +365,50 @@ export interface Database {
           created_at?: string
           updated_at?: string
           is_active?: boolean
+        }
+      }
+      question_answers: {
+        Row: {
+          id: string
+          user_email: string
+          question: string
+          answer: string
+          audio_url: string | null
+          duration: number
+          category: string
+          difficulty: string
+          practice_session_id: string | null
+          call_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_email: string
+          question: string
+          answer: string
+          audio_url?: string | null
+          duration?: number
+          category?: string
+          difficulty?: string
+          practice_session_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_email?: string
+          question?: string
+          answer?: string
+          audio_url?: string | null
+          duration?: number
+          category?: string
+          difficulty?: string
+          practice_session_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
     }

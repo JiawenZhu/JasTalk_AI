@@ -14,23 +14,7 @@ export async function GET(request: NextRequest) {
     // Get user's practice sessions
     const { data: sessions, error } = await supabase
       .from('practice_sessions')
-      .select(`
-        *,
-        interviews (
-          id,
-          title,
-          description,
-          interview_type
-        ),
-        practice_responses (
-          id,
-          question_id,
-          user_response,
-          ai_feedback,
-          score,
-          response_duration_seconds
-        )
-      `)
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -39,7 +23,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch practice sessions' }, { status: 500 });
     }
 
-    return NextResponse.json({ sessions: sessions || [] });
+    // Group by interviewer + normalized questions signature; choose latest (timestamped name if tie)
+    const normalizeText = (t: string) => (t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const signatureOf = (s: any) => {
+      const agent = normalizeText(s.agent_name || '');
+      const qs = Array.isArray(s.questions) ? s.questions.map((q: any) => normalizeText(q.text || '')).join('|') : String(s.total_questions || 0);
+      // If there is a call_id, include it to avoid merging across totally different calls with same questions
+      return `${agent}__${qs}`;
+    };
+
+    const latestBySignature = new Map<string, any>();
+    for (const s of sessions || []) {
+      const sig = signatureOf(s);
+      const existing = latestBySignature.get(sig);
+      if (!existing) {
+        latestBySignature.set(sig, s);
+        continue;
+      }
+      const sTs = new Date(s.created_at).getTime();
+      const eTs = new Date(existing.created_at).getTime();
+      if (sTs > eTs) {
+        latestBySignature.set(sig, s);
+      } else if (sTs === eTs) {
+        const hasTimestamp = typeof s.session_name === 'string' && (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(s.session_name) || /\d{1,2}:\d{2}(:\d{2})?/.test(s.session_name));
+        const existingHasTimestamp = typeof existing.session_name === 'string' && (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(existing.session_name) || /\d{1,2}:\d{2}(:\d{2})?/.test(existing.session_name));
+        if (hasTimestamp && !existingHasTimestamp) {
+          latestBySignature.set(sig, s);
+        }
+      }
+    }
+
+    const uniqueSessions = Array.from(latestBySignature.values());
+    return NextResponse.json({ sessions: uniqueSessions });
   } catch (error) {
     console.error('Error in GET /api/practice-sessions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -63,7 +78,9 @@ export async function POST(request: NextRequest) {
       agent_id, 
       agent_name, 
       questions,
-      call_id
+      call_id,
+      retell_agent_id,
+      retell_call_id
     } = body;
 
     if (!session_name) {
@@ -80,9 +97,12 @@ export async function POST(request: NextRequest) {
         agent_id,
         agent_name,
         total_questions: questions?.length || 0,
+        questions: questions || [], // Store the questions array
         status: 'in-progress',
         start_time: new Date().toISOString(),
-        call_id: call_id
+        call_id: call_id,
+        retell_agent_id: retell_agent_id,
+        retell_call_id: retell_call_id
       })
       .select()
       .single();
@@ -110,16 +130,22 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { sessionId, status, end_time } = body;
+    const { sessionId, status, end_time, questions } = body;
 
     if (!sessionId) {
       return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
     }
 
     // Update practice session
-    const updateData: any = { status };
+    const updateData: any = {};
+    if (status) {
+      updateData.status = status;
+    }
     if (end_time) {
       updateData.end_time = end_time;
+    }
+    if (questions) {
+      updateData.questions = questions;
     }
 
     console.log('Updating practice session:', { sessionId, updateData, userId: user.id });
@@ -149,4 +175,43 @@ export async function PUT(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-} 
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createServerClient();
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { sessionIds } = body;
+    
+    if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+      return NextResponse.json({ error: 'Invalid session IDs' }, { status: 400 });
+    }
+
+    // Delete multiple sessions (only if they belong to the user)
+    const { error } = await supabase
+      .from('practice_sessions')
+      .delete()
+      .in('id', sessionIds)
+      .eq('user_id', user.id); // Ensure user can only delete their own sessions
+
+    if (error) {
+      console.error('Error deleting practice sessions:', error);
+      return NextResponse.json({ error: 'Failed to delete sessions' }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      message: `Successfully deleted ${sessionIds.length} sessions`,
+      deletedCount: sessionIds.length 
+    });
+  } catch (error) {
+    console.error('Error in DELETE /api/practice-sessions:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

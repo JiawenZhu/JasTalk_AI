@@ -56,14 +56,10 @@ const nextConfig = {
     ];
   },
 
-  // Redirects
+  // Redirects - removed root redirect to let client handle authentication
   async redirects() {
     return [
-      {
-        source: "/",
-        destination: "/dashboard",
-        permanent: true,
-      },
+      // Add any other redirects here if needed
     ];
   },
 

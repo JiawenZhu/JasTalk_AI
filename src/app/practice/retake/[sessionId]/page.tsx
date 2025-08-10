@@ -1,5 +1,6 @@
 "use client";
 
+import "../../../globals.css";
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -15,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "@/contexts/auth.context";
 import { toast } from "@/components/ui/use-toast";
+import Navbar from "@/components/navbar";
 
 export const dynamic = 'force-dynamic';
 
@@ -160,7 +162,7 @@ export default function RetakePracticePage({
       }
 
       const data = await response.json();
-      console.log('Practice call registered for retake:', data);
+      console.log('Practice call registered for retake successfully');
 
       // Update session with call details
       setSession(prev => prev ? {
@@ -375,7 +377,10 @@ export default function RetakePracticePage({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Navigation Bar */}
+      <Navbar />
+      
+      {/* Page Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
@@ -394,7 +399,7 @@ export default function RetakePracticePage({
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 pt-24 sm:pt-20">
         {/* Previous Performance */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="flex items-center space-x-2 mb-4">

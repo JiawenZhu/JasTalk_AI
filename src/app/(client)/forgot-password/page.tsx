@@ -57,8 +57,8 @@ export default function ForgotPasswordPage() {
           <CardHeader className="text-center space-y-2">
             <div className="flex justify-center mb-4">
               <Image
-                src="/FoloUp.png"
-                alt="FoloUp Logo"
+                src="/jastalk.png"
+                alt="JasTalk AI Logo"
                 width={120}
                 height={40}
                 className="h-10 w-auto"

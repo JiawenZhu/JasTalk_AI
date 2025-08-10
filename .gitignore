@@ -50,3 +50,6 @@ package-lock.json
 
 # Supabase
 .env.example.new
+
+# Local env backups
+.env.local.backup

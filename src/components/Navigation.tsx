@@ -26,7 +26,7 @@ const Navigation: React.FC = () => {
                 <span className="text-white font-bold text-sm">🎯</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1E2B3A]">Premium Interview</span>
+                <span className="text-lg font-bold text-[#1E2B3A]">JasTalk AI</span>
                 <span className="text-xs text-gray-500 -mt-1">AI-Powered Practice</span>
               </div>
               <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full ml-2">

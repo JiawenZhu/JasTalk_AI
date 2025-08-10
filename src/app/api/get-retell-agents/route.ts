@@ -69,23 +69,63 @@ export async function GET(req: Request) {
       console.log("Retell agents fetched successfully:", agents.length);
       console.log("First agent sample:", agents[0]);
       
-      // Transform agents to a more user-friendly format
-      const formattedAgents = agents.map((agent: any) => ({
-        agent_id: agent.agent_id,
-        name: agent.agent_name || `Agent ${agent.agent_id}`,
-        description: agent.agent_description || "AI interviewer for practice sessions",
-        voice_id: agent.voice_id || "default-voice",
-        category: agent.category || "general",
-        difficulty: agent.difficulty || "medium",
-        specialties: agent.specialties || ["general interview skills"],
-        created_at: agent.created_at,
-        updated_at: agent.updated_at
-      }));
+      // Helper to derive an agent type from the raw Retell agent object.
+      // This normalizes various possible fields into a simple string we can use for de-duplication and display.
+      const deriveAgentType = (agent: any): string => {
+        // Prefer explicit fields if provided by the API
+        const explicitType = agent.agent_type || agent.type;
+        if (explicitType && typeof explicitType === 'string') {
+          return explicitType.toLowerCase();
+        }
+
+        // Heuristics based on presence of fields used by different Retell agent modalities
+        if (agent.conversation_flow || agent.flow || agent.graph) {
+          return 'conversation-flow';
+        }
+        if (agent.prompt || agent.prompt_text || agent.system_prompt) {
+          return 'single-prompt';
+        }
+        // Fallback to response engine type when available
+        const engineType = agent.response_engine?.type;
+        if (engineType && typeof engineType === 'string') {
+          return engineType.toLowerCase();
+        }
+        
+return 'unknown';
+      };
+
+      // Transform agents to a more user-friendly format and include a normalized agent_type for de-duplication
+      const formattedAgents = agents.map((agent: any) => {
+        const agent_type = deriveAgentType(agent);
+        
+return {
+          agent_id: agent.agent_id,
+          name: agent.agent_name || `Agent ${agent.agent_id}`,
+          description: agent.agent_description || "AI interviewer for practice sessions",
+          voice_id: agent.voice_id || "default-voice",
+          category: agent.category || "general",
+          difficulty: agent.difficulty || "medium",
+          specialties: agent.specialties || ["general interview skills"],
+          agent_type,
+          created_at: agent.created_at,
+          updated_at: agent.updated_at,
+        };
+      });
+
+      // Server-side de-duplication: ensure only one agent per (name, agent_type, voice_id)
+      const seen = new Set<string>();
+      const dedupedAgents = formattedAgents.filter((a: any) => {
+        const key = `${(a.name || '').toLowerCase().trim()}|${(a.agent_type || 'unknown').toLowerCase()}|${(a.voice_id || 'default-voice').toLowerCase()}`;
+        if (seen.has(key)) {return false;}
+        seen.add(key);
+        
+return true;
+      });
 
       return NextResponse.json({
         success: true,
-        agents: formattedAgents,
-        total: agents.length
+        agents: dedupedAgents,
+        total: dedupedAgents.length
       });
 
     } catch (retellError: any) {

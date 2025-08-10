@@ -1,5 +1,6 @@
 "use client";
 
+import "../../globals.css";
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
@@ -8,10 +9,15 @@ import {
   ChartBarIcon,
   ClockIcon,
   MicrophoneIcon,
-  StarIcon
+  StarIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
+import Navbar from "@/components/navbar";
+import HelpButton from "@/components/ui/help-button";
+import WelcomeModal from "@/components/onboarding/welcome-modal";
+import { useOnboarding } from "@/hooks/use-onboarding";
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +48,12 @@ interface PracticeResult {
 export default function PracticeCompletePage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const { 
+    isFirstTime, 
+    showOnboarding, 
+    completeOnboarding, 
+    hideOnboardingModal 
+  } = useOnboarding();
   
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,7 +256,10 @@ export default function PracticeCompletePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Navigation Bar */}
+      <Navbar />
+      
+      {/* Page Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
@@ -261,7 +276,7 @@ export default function PracticeCompletePage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 pt-24 sm:pt-20">
         {/* Success Message */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -464,6 +479,20 @@ export default function PracticeCompletePage() {
           </motion.button>
         </motion.div>
       </div>
+
+      {/* Help Button */}
+      <HelpButton 
+        variant="floating" 
+        position="bottom-right" 
+        size="md"
+      />
+
+      {/* Onboarding Modal */}
+      <WelcomeModal
+        isOpen={showOnboarding}
+        isFirstTime={isFirstTime}
+        onClose={hideOnboardingModal}
+      />
     </div>
   );
 } 

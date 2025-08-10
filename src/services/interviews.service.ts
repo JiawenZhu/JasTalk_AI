@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClientClient } from "@/lib/supabase-client";
 
 // Initialize Supabase client lazily to avoid build-time errors
 let supabaseClient: any = null;
@@ -8,14 +8,7 @@ const getSupabaseClient = () => {
     return supabaseClient;
   }
   
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase configuration");
-  }
-  
-  supabaseClient = createClient(supabaseUrl, supabaseKey);
+  supabaseClient = createClientClient();
   
   return supabaseClient;
 };

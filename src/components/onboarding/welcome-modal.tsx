@@ -1,349 +1,300 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog";
+  XMarkIcon,
+  PlayIcon,
+  UserGroupIcon,
+  DocumentTextIcon,
+  MicrophoneIcon,
+  ChartBarIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  CheckIcon,
+  SparklesIcon
+} from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Mic, 
-  BarChart3, 
-  Share2, 
-  CheckCircle, 
-  ArrowRight, 
-  ArrowLeft,
-  Users,
-  Zap,
-  Target
-} from "lucide-react";
+
+interface OnboardingStep {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  image?: string;
+  action?: string;
+  tips?: string[];
+}
 
 interface WelcomeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userName?: string;
+  isFirstTime?: boolean;
 }
 
-const onboardingSteps = [
-  {
-    title: "Welcome to FoloUp!",
-    description: "Your AI-powered interview practice platform",
-    content: (
-      <div className="text-center space-y-6">
-        <div className="mx-auto w-24 h-24 bg-gradient-to-r from-indigo-100 to-blue-100 rounded-full flex items-center justify-center">
-          <Target className="h-12 w-12 text-indigo-600" />
-        </div>
-        <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">
-            Ready to ace your next interview?
-          </h3>
-          <p className="text-gray-600">
-            We'll help you practice with AI-powered mock interviews tailored to your needs.
-          </p>
-        </div>
-      </div>
-    )
-  },
-  {
-    title: "AI Voice Interviews",
-    description: "Practice with realistic AI interviewers",
-    content: (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center">
-          <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center">
-            <Mic className="h-10 w-10 text-indigo-600" />
-          </div>
-        </div>
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            Natural Conversation Flow
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Our AI interviewers adapt to your responses and provide realistic interview experiences.
-          </p>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Industry-specific questions</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Real-time voice responses</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Behavioral & technical questions</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  },
-  {
-    title: "Performance Analytics",
-    description: "Get detailed insights and feedback",
-    content: (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center">
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
-            <BarChart3 className="h-10 w-10 text-blue-600" />
-          </div>
-        </div>
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            Track Your Progress
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Receive comprehensive feedback on your interview performance.
-          </p>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Communication skills analysis</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Response time metrics</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Improvement suggestions</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  },
-  {
-    title: "Share & Collaborate",
-    description: "Create shareable interview links",
-    content: (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-            <Share2 className="h-10 w-10 text-green-600" />
-          </div>
-        </div>
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            Custom Interview Links
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Generate unique links for remote assessments or team evaluations.
-          </p>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>One-click link generation</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Candidate result tracking</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Team collaboration tools</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  },
-  {
-    title: "Ready to Start!",
-    description: "Begin your interview practice journey",
-    content: (
-      <div className="text-center space-y-6">
-        <div className="mx-auto w-24 h-24 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center">
-          <Zap className="h-12 w-12 text-green-600" />
-        </div>
-        <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">
-            You're All Set!
-          </h3>
-          <p className="text-gray-600 mb-6">
-            Time to practice and improve your interview skills. Good luck!
-          </p>
-          <div className="bg-indigo-50 rounded-lg p-4">
-            <p className="text-sm text-indigo-800 font-medium">
-              💡 Pro Tip: Start with 2-3 practice sessions to get comfortable with the platform.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-];
-
-export function WelcomeModal({ isOpen, onClose, userName }: WelcomeModalProps) {
+export default function WelcomeModal({ isOpen, onClose, isFirstTime = false }: WelcomeModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [direction, setDirection] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const nextStep = () => {
+  const onboardingSteps: OnboardingStep[] = [
+    {
+      id: "welcome",
+      title: "Welcome to JasTalk AI!",
+      description: "Your AI-powered interview practice platform. Let's get you started with a quick tour of how to use our product effectively.",
+      icon: <SparklesIcon className="w-8 h-8 text-blue-600" />,
+      action: "Let's get started!",
+      tips: [
+        "Practice with real AI interviewers",
+        "Get instant feedback and insights",
+        "Track your progress over time"
+      ]
+    },
+    {
+      id: "upload",
+      title: "Upload Your Documents",
+      description: "Start by uploading your resume, job description, or any relevant documents. Our AI will generate personalized interview questions based on your content.",
+      icon: <DocumentTextIcon className="w-8 h-8 text-green-600" />,
+      image: "/upload-demo.png",
+      action: "Upload your documents",
+      tips: [
+        "Upload resume for personalized questions",
+        "Include job descriptions for targeted practice",
+        "AI analyzes your background automatically"
+      ]
+    },
+    {
+      id: "questions",
+      title: "Generate Interview Questions",
+      description: "Our AI analyzes your documents and creates relevant interview questions. You can review, edit, or regenerate questions to match your practice goals.",
+      icon: <DocumentTextIcon className="w-8 h-8 text-purple-600" />,
+      action: "Generate questions",
+      tips: [
+        "Questions tailored to your background",
+        "Mix of technical and behavioral questions",
+        "Adjust difficulty and focus areas"
+      ]
+    },
+    {
+      id: "interviewers",
+      title: "Choose Your Interviewer",
+      description: "Select from our AI interviewers, each with different personalities, specialties, and difficulty levels. Find the perfect match for your practice session.",
+      icon: <UserGroupIcon className="w-8 h-8 text-orange-600" />,
+      action: "Select interviewer",
+      tips: [
+        "Different personalities and styles",
+        "Specialized in various domains",
+        "Adjustable difficulty levels"
+      ]
+    },
+    {
+      id: "practice",
+      title: "Start Your Practice Interview",
+      description: "Begin your voice-based interview with the AI. Speak naturally, answer questions, and get real-time feedback. It's just like a real phone interview!",
+      icon: <MicrophoneIcon className="w-8 h-8 text-blue-600" />,
+      action: "Start practice interview",
+      tips: [
+        "Voice-based conversation",
+        "Real-time AI responses",
+        "Natural interview flow"
+      ]
+    },
+    {
+      id: "analytics",
+      title: "Review Your Performance",
+      description: "After each practice session, review detailed analytics including communication skills, technical depth, confidence, and areas for improvement.",
+      icon: <ChartBarIcon className="w-8 h-8 text-green-600" />,
+      action: "View analytics",
+      tips: [
+        "Detailed performance metrics",
+        "Communication analysis",
+        "Improvement suggestions"
+      ]
+    },
+    {
+      id: "complete",
+      title: "You're All Set!",
+      description: "You now know how to use JasTalk AI effectively. Start practicing and improve your interview skills with our AI-powered platform.",
+      icon: <CheckIcon className="w-8 h-8 text-green-600" />,
+      action: "Start practicing",
+      tips: [
+        "Practice regularly for best results",
+        "Try different interviewers",
+        "Track your progress over time"
+      ]
+    }
+  ];
+
+  const handleNext = () => {
     if (currentStep < onboardingSteps.length - 1) {
-      setDirection(1);
       setCurrentStep(currentStep + 1);
+    } else {
+      handleComplete();
     }
   };
 
-  const prevStep = () => {
+  const handlePrevious = () => {
     if (currentStep > 0) {
-      setDirection(-1);
       setCurrentStep(currentStep - 1);
     }
   };
 
   const handleComplete = () => {
-    localStorage.setItem('foloup-onboarding-completed', 'true');
+    setIsLoading(true);
+    
+    // Mark onboarding as completed
+    localStorage.setItem('onboardingCompleted', 'true');
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      setIsLoading(false);
+      onClose();
+    }, 1000);
+  };
+
+  const handleSkip = () => {
+    localStorage.setItem('onboardingCompleted', 'true');
     onClose();
   };
 
-  const slideVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0
-    }),
-    center: {
-      zIndex: 1,
-      x: 0,
-      opacity: 1
-    },
-    exit: (direction: number) => ({
-      zIndex: 0,
-      x: direction < 0 ? 300 : -300,
-      opacity: 0
-    })
-  };
-
-  const swipeConfidenceThreshold = 10000;
-  const swipePower = (offset: number, velocity: number) => {
-    return Math.abs(offset) * velocity;
-  };
+  const currentStepData = onboardingSteps[currentStep];
+  const isLastStep = currentStep === onboardingSteps.length - 1;
+  const progress = ((currentStep + 1) / onboardingSteps.length) * 100;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
-        <div className="relative">
-          {/* Progress Bar */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-200">
-            <motion.div
-              className="h-full bg-gradient-to-r from-indigo-600 to-blue-600"
-              initial={{ width: "0%" }}
-              animate={{ width: `${((currentStep + 1) / onboardingSteps.length) * 100}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-
-          <div className="p-8 pt-12">
-            <DialogHeader className="mb-6">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <DialogTitle className="text-2xl font-bold text-gray-900">
-                    {onboardingSteps[currentStep].title}
-                  </DialogTitle>
-                  <p className="text-gray-600 mt-1">
-                    {onboardingSteps[currentStep].description}
-                  </p>
+                <div className="flex items-center space-x-3">
+                  {currentStepData.icon}
+                  <div>
+                    <h2 className="text-xl font-semibold">{currentStepData.title}</h2>
+                    <p className="text-blue-100 text-sm">
+                      Step {currentStep + 1} of {onboardingSteps.length}
+                    </p>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {currentStep + 1} of {onboardingSteps.length}
-                </Badge>
-              </div>
-            </DialogHeader>
-
-            <div className="relative h-96 overflow-hidden">
-              <AnimatePresence initial={false} custom={direction}>
-                <motion.div
-                  key={currentStep}
-                  custom={direction}
-                  variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{
-                    x: { type: "spring", stiffness: 300, damping: 30 },
-                    opacity: { duration: 0.2 }
-                  }}
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={1}
-                  onDragEnd={(e, { offset, velocity }) => {
-                    const swipe = swipePower(offset.x, velocity.x);
-
-                    if (swipe < -swipeConfidenceThreshold && currentStep < onboardingSteps.length - 1) {
-                      nextStep();
-                    } else if (swipe > swipeConfidenceThreshold && currentStep > 0) {
-                      prevStep();
-                    }
-                  }}
-                  className="absolute inset-0 flex items-center justify-center"
+                <button
+                  onClick={handleSkip}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <Card className="w-full border-none shadow-none">
-                    <CardContent className="p-6">
-                      {onboardingSteps[currentStep].content}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </AnimatePresence>
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="mt-4">
+                <div className="w-full bg-white/20 rounded-full h-2">
+                  <motion.div
+                    className="bg-white h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Navigation */}
-            <div className="flex items-center justify-between mt-8">
-              <Button
-                variant="outline"
-                onClick={prevStep}
-                disabled={currentStep === 0}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Previous
-              </Button>
-
-              <div className="flex space-x-2">
-                {onboardingSteps.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setDirection(index > currentStep ? 1 : -1);
-                      setCurrentStep(index);
-                    }}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentStep
-                        ? "bg-indigo-600"
-                        : index < currentStep
-                        ? "bg-indigo-300"
-                        : "bg-gray-300"
-                    }`}
-                  />
-                ))}
+            {/* Content */}
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="text-center mb-6">
+                <p className="text-gray-700 text-lg leading-relaxed">
+                  {currentStepData.description}
+                </p>
               </div>
 
-              {currentStep < onboardingSteps.length - 1 ? (
-                <Button
-                  onClick={nextStep}
-                  className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
-                >
-                  Next
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleComplete}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                >
-                  Get Started
-                  <Zap className="h-4 w-4" />
-                </Button>
+              {/* Tips Section */}
+              {currentStepData.tips && (
+                <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                  <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
+                    <SparklesIcon className="w-4 h-4 mr-2" />
+                    Pro Tips
+                  </h3>
+                  <ul className="space-y-2">
+                    {currentStepData.tips.map((tip, index) => (
+                      <li key={index} className="flex items-start space-x-2 text-sm text-blue-800">
+                        <CheckIcon className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Demo Image Placeholder */}
+              {currentStepData.image && (
+                <div className="bg-gray-100 rounded-xl p-8 mb-6 text-center">
+                  <div className="w-32 h-32 bg-gray-200 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                    <PlayIcon className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-500">Demo visualization</p>
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={handlePrevious}
+                  disabled={currentStep === 0}
+                  className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ArrowLeftIcon className="w-4 h-4" />
+                  <span>Previous</span>
+                </button>
+
+                <div className="flex items-center space-x-3">
+                  {!isFirstTime && (
+                    <button
+                      onClick={handleSkip}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      Skip
+                    </button>
+                  )}
+                  
+                  <Button
+                    onClick={handleNext}
+                    disabled={isLoading}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg font-medium"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Completing...</span>
+                      </div>
+                    ) : isLastStep ? (
+                      <div className="flex items-center space-x-2">
+                        <span>{currentStepData.action}</span>
+                        <CheckIcon className="w-4 h-4" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <span>{currentStepData.action}</span>
+                        <ArrowRightIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 } 

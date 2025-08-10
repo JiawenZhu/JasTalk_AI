@@ -3,26 +3,27 @@ import "./globals.css";
 import { Metadata, Viewport } from "next";
 import { Inter } from 'next/font/google';
 import Providers from '@/components/providers';
+import MobileNav from '@/components/mobile/MobileNav';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Premium Interview — AI-Powered Practice",
+  title: "JasTalk AI — AI-Powered Interview Practice",
   description: "Practice for your next job interview with AI-powered mock interviews, personalized feedback, and comprehensive analytics",
   openGraph: {
-    title: "Premium Interview — AI-Powered Practice",
+    title: "JasTalk AI — AI-Powered Interview Practice",
     description: "Practice for your next job interview with AI-powered mock interviews, personalized feedback, and comprehensive analytics",
-    url: "https://foloup.com",
-    siteName: "Premium Interview",
+    url: "https://jastalk.ai",
+    siteName: "JasTalk AI",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Premium Interview — AI-Powered Practice",
+    title: "JasTalk AI — AI-Powered Interview Practice",
     description: "Practice for your next job interview with AI-powered mock interviews, personalized feedback, and comprehensive analytics",
   },
-  metadataBase: new URL("https://foloup.com"),
+  metadataBase: new URL("https://jastalk.ai"),
 };
 
 export const viewport: Viewport = {
@@ -46,9 +47,13 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers>
-          <main className="min-h-screen bg-[#F7F9FC]">
+          <main className="min-h-screen bg-[#F7F9FC] pb-14 sm:pb-0">
             {children}
           </main>
+          {/* Mobile bottom nav (hidden on desktop) */}
+          <div className="sm:hidden">
+            <MobileNav />
+          </div>
         </Providers>
       </body>
     </html>

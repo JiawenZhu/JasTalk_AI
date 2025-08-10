@@ -1,5 +1,6 @@
 "use client";
 
+import "../../globals.css";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -15,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "@/contexts/auth.context";
 import { toast } from "@/components/ui/use-toast";
+import Navbar from "@/components/navbar";
 
 export const dynamic = 'force-dynamic';
 
@@ -143,8 +145,9 @@ export default function PracticeHistoryPage() {
       const data = await response.json();
       
       if (response.ok) {
-        // Transform database data to match our interface
-        const transformedSessions = data.sessions.map((session: any) => ({
+        // Filter only completed sessions and transform database data
+        const completedSessions = data.sessions.filter((session: any) => session.status === 'completed');
+        const transformedSessions = completedSessions.map((session: any) => ({
           id: session.id,
           title: session.session_name,
           type: session.interviews?.interview_type || 'Practice',
@@ -291,7 +294,10 @@ export default function PracticeHistoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Navigation Bar */}
+      <Navbar />
+      
+      {/* Page Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
@@ -311,7 +317,7 @@ export default function PracticeHistoryPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="px-4 py-3 bg-white border-b border-gray-200">
+      <div className="px-4 py-3 bg-white border-b border-gray-200 pt-20">
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => setFilter('all')}

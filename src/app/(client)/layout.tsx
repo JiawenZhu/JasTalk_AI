@@ -11,6 +11,9 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
 import { useOrganization } from "@/contexts/organization.context";
 import { useEffect, useState } from "react";
+import HelpButton from "@/components/ui/help-button";
+import WelcomeModal from "@/components/onboarding/welcome-modal";
+import { useOnboarding } from "@/hooks/use-onboarding";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,6 +23,12 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const { loading: orgLoading } = useOrganization();
   const [layoutReady, setLayoutReady] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
+  const { 
+    isFirstTime, 
+    showOnboarding, 
+    completeOnboarding, 
+    hideOnboardingModal 
+  } = useOnboarding();
 
   const isAuthPage = pathname.includes("/sign-in") || pathname.includes("/sign-up");
   const isLoading = !isAuthPage && (authLoading || orgLoading);
@@ -53,12 +62,16 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     <div className="navigation-layer min-h-screen bg-[#F7F9FC]">
       {!isAuthPage && <Navbar />}
       <div className="flex flex-row h-screen">
-        {!isAuthPage && <SideMenu />}
+        {!isAuthPage && (
+          <div className="hidden sm:block">
+            <SideMenu />
+          </div>
+        )}
         
         {/* Content area with smooth transitions */}
         <div className={cn(
           "pt-[64px] h-full overflow-y-auto flex-grow transition-opacity duration-200",
-          !isAuthPage ? "ml-[200px] navigation-offset" : "",
+          !isAuthPage ? "sm:ml-[200px] navigation-offset" : "",
           contentVisible ? "opacity-100" : "opacity-0"
         )}>
           {isLoading ? (
@@ -75,6 +88,23 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </div>
+      
+      {/* Help Button - only show for authenticated users */}
+      {!isAuthPage && (
+        <HelpButton 
+          variant="floating" 
+          position="bottom-right" 
+          size="sm"
+          className="hidden sm:flex" 
+        />
+      )}
+
+      {/* Onboarding Modal */}
+      <WelcomeModal
+        isOpen={showOnboarding}
+        isFirstTime={isFirstTime}
+        onClose={hideOnboardingModal}
+      />
       
       <Toaster
         toastOptions={{

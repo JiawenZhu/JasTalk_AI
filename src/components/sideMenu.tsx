@@ -29,7 +29,7 @@ function SideMenu() {
   // Render immediately to prevent layout shifts
   return (
     <aside 
-      className="z-[1000] bg-slate-100 p-6 w-[200px] fixed top-[64px] left-0 h-[calc(100vh-64px)] border-r border-gray-200 shadow-sm"
+      className="hidden sm:block z-[1000] bg-slate-100 p-6 w-[200px] fixed top-[64px] left-0 h-[calc(100vh-64px)] border-r border-gray-200 shadow-sm"
       style={{ 
         position: 'fixed',
         top: '64px',

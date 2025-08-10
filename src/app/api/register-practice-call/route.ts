@@ -9,7 +9,7 @@ const retellClient = new Retell({
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    console.log("Received practice call request:", body);
+    console.log("Received practice call request");
 
     // Check if Retell API key is available and not a placeholder
     if (!process.env.RETELL_API_KEY || process.env.RETELL_API_KEY === 'your_retell_api_key') {
@@ -26,8 +26,7 @@ export async function POST(req: Request) {
     // Use the provided agent_id or fall back to default practice agent
     const practiceAgentId = body.agent_id || process.env.PRACTICE_AGENT_ID || "default-practice-agent-id";
     
-    console.log("Creating Retell web call for practice interview with agent_id:", practiceAgentId);
-    console.log("Questions:", body.questions);
+    console.log("Creating Retell web call for practice interview");
 
     // Format questions for the agent prompt
     const formattedQuestions = body.questions.map((q: any, index: number) => 
@@ -45,7 +44,7 @@ export async function POST(req: Request) {
       duration: body.duration || "15-20 minutes"
     };
 
-    console.log("Dynamic data for practice interview:", dynamicData);
+    console.log("Dynamic data prepared for practice interview");
 
     try {
       const registerCallResponse = await retellClient.call.createWebCall({
@@ -53,7 +52,7 @@ export async function POST(req: Request) {
         retell_llm_dynamic_variables: dynamicData,
       });
 
-      console.log("Practice call created successfully:", registerCallResponse);
+      console.log("Practice call created successfully");
       logger.info("Practice call registered successfully");
 
       return NextResponse.json(
@@ -76,6 +75,32 @@ export async function POST(req: Request) {
         statusText: retellError.statusText,
         response: retellError.response?.data || retellError.response
       });
+      // Fallback attempt: if the provided agent failed, try PRACTICE_AGENT_ID
+      const fallbackAgentId = process.env.PRACTICE_AGENT_ID;
+      if (fallbackAgentId && fallbackAgentId !== practiceAgentId) {
+        try {
+          console.log("Retrying with fallback PRACTICE_AGENT_ID", fallbackAgentId);
+          const registerCallResponse = await retellClient.call.createWebCall({
+            agent_id: fallbackAgentId,
+            retell_llm_dynamic_variables: dynamicData,
+          });
+
+          return NextResponse.json(
+            {
+              registerCallResponse,
+              practice_session: {
+                agent_id: fallbackAgentId,
+                questions: body.questions,
+                dynamic_data: dynamicData
+              },
+              note: "Retell call created with fallback agent"
+            },
+            { status: 200 }
+          );
+        } catch (fallbackError: any) {
+          console.error("Fallback agent call failed:", fallbackError);
+        }
+      }
 
       // In development, return a mock response to allow testing
       if (process.env.NODE_ENV === 'development') {

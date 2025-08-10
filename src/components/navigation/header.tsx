@@ -25,7 +25,7 @@ const Header = () => {
                 <span className="text-white font-bold text-sm">PI</span>
               </div>
               <span className="text-xl font-semibold text-gray-900">
-                Premium Interview
+                JasTalk AI
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
                 Beta

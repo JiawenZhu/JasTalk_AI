@@ -345,7 +345,7 @@ function Call({ interview }: InterviewProps) {
         console.log("User identified as old user");
         setIsOldUser(true);
       } else {
-        console.log("Registering new call with data:", data);
+        console.log("Registering new call");
         
         try {
           const registerCallResponse: registerCallResponseType = await axios.post(
@@ -353,7 +353,7 @@ function Call({ interview }: InterviewProps) {
             { dynamic_data: data, interviewer_id: interview?.interviewer_id },
           );
           
-          console.log("Register call response:", registerCallResponse.data);
+          console.log("Register call response received");
           
           if (registerCallResponse.data.registerCallResponse.access_token) {
             console.log("Starting web call with access token");

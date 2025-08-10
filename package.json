@@ -1,20 +1,20 @@
 {
-  "name": "roundly-ai",
+  "name": "jastalk-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered voice interviewer platform for hiring with real-time code analysis",
-  "homepage": "https://github.com/JiawenZhu/Roundly.AI",
+  "description": "AI-powered interview practice platform with voice interaction and real-time feedback",
+  "homepage": "https://github.com/JiawenZhu/JasTalk-AI",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JiawenZhu/Roundly.AI.git"
+    "url": "https://github.com/JiawenZhu/JasTalk-AI.git"
   },
   "keywords": [
     "ai",
     "interview",
     "voice",
-    "hiring",
+    "practice",
     "retell-ai",
-    "code-analysis",
+    "interview-coaching",
     "nextjs",
     "supabase"
   ],
@@ -58,6 +58,7 @@
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-toggle": "^1.0.3",
     "@radix-ui/react-tooltip": "^1.1.2",
+    "@reduxjs/toolkit": "^2.8.2",
     "@shadcn/ui": "^0.0.4",
     "@stripe/stripe-js": "^7.3.1",
     "@supabase/auth-helpers-nextjs": "^0.8.7",
@@ -96,6 +97,7 @@
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.49.0",
     "react-media-recorder": "^1.7.1",
+    "react-redux": "^9.2.0",
     "react-resizable-panels": "^3.0.2",
     "react-webcam": "^7.2.0",
     "retell-client-js-sdk": "^2.0.0",

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import "../../globals.css";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeftIcon,
@@ -20,6 +21,13 @@ import { useAuth } from "@/contexts/auth.context";
 import { toast } from "@/components/ui/use-toast";
 import SharePracticePopup from "@/components/practice/sharePracticePopup";
 import VoiceAgentSelector from "@/components/practice/VoiceAgentSelector";
+import Navbar from "@/components/navbar";
+import HelpButton from "@/components/ui/help-button";
+import WelcomeModal from "@/components/onboarding/welcome-modal";
+import { useOnboarding } from "@/hooks/use-onboarding";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
+import { hydrateFromStorage, setSelectedInterviewer as setSelectedInterviewerRedux } from '@/store/interviewerSlice';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +63,12 @@ interface PracticeSession {
 export default function PracticeInterviewPage() {
   const { isAuthenticated, user } = useAuth();
   const router = useRouter();
+  const { 
+    isFirstTime, 
+    showOnboarding, 
+    completeOnboarding, 
+    hideOnboardingModal 
+  } = useOnboarding();
   
   const [session, setSession] = useState<PracticeSession | null>(null);
   const [isCalling, setIsCalling] = useState(false);
@@ -68,67 +82,52 @@ export default function PracticeInterviewPage() {
   
   // User is already authenticated, no need to collect email/name
   const [isOldUser, setIsOldUser] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<VoiceAgent | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<VoiceAgent | undefined>(undefined);
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [isSharePopupOpen, setIsSharePopupOpen] = useState(false);
   const [isReuseSession, setIsReuseSession] = useState(false);
   const [jobDescription, setJobDescription] = useState<string>('');
+  const [createdInDb, setCreatedInDb] = useState(false);
   
   const webClientRef = useRef<any>(null);
+  // Redux: keep interviewer consistent
+  const dispatch = useDispatch();
+  const reduxInterviewer = useSelector((state: RootState) => state.interviewer.selectedInterviewer);
 
-  // Load generated questions from localStorage on component mount
   useEffect(() => {
-    try {
-      const storedQuestions = localStorage.getItem('generatedQuestions');
-      if (storedQuestions) {
-        const parsedQuestions = JSON.parse(storedQuestions);
-        setMockQuestions(parsedQuestions);
-      }
-    } catch (error) {
-      console.error('Error loading questions from localStorage:', error);
-    }
-  }, []);
+    dispatch(hydrateFromStorage());
+  }, [dispatch]);
 
-  // Load questions from localStorage or use defaults
-  const [mockQuestions, setMockQuestions] = useState<Question[]>([
-    {
-      id: '1',
-      text: 'Tell me about a challenging technical problem you solved recently. What was your approach and what did you learn?',
-      type: 'behavioral',
-      difficulty: 'medium',
-      category: 'Problem Solving'
-    },
-    {
-      id: '2',
-      text: 'How would you design a scalable web application that can handle millions of users?',
-      type: 'system-design',
-      difficulty: 'hard',
-      category: 'System Design'
-    },
-    {
-      id: '3',
-      text: 'Describe a time when you had to work with a difficult team member. How did you handle the situation?',
-      type: 'behavioral',
-      difficulty: 'easy',
-      category: 'Teamwork'
+  useEffect(() => {
+    if (reduxInterviewer && !selectedAgent) {
+      setSelectedAgent(reduxInterviewer as any);
     }
-  ]);
+  }, [reduxInterviewer, selectedAgent]);
+  const mockAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [mockTrackIndex, setMockTrackIndex] = useState<number>(0);
+
+  // Questions will be loaded directly from localStorage when creating sessions
 
 
 
   const handleAgentSelect = (agent: VoiceAgent) => {
     setSelectedAgent(agent);
     setShowAgentSelector(false);
+    
     toast({
       title: "Interviewer Selected",
       description: `You've selected ${agent.name} for your practice interview.`,
     });
+    
+    // Trigger re-initialization immediately via the selectedAgent effect
+    setIsLoading(true);
   };
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/sign-in');
-      return;
+      
+return;
     }
 
     // Check if this is a reuse session
@@ -156,13 +155,6 @@ export default function PracticeInterviewPage() {
 
   const loadReuseData = () => {
     try {
-      // Load existing questions
-      const storedQuestions = localStorage.getItem('generatedQuestions');
-      if (storedQuestions) {
-        const parsedQuestions = JSON.parse(storedQuestions);
-        setMockQuestions(parsedQuestions);
-      }
-
       // Load job description for display
       const storedJobDescription = localStorage.getItem('reuseJobDescription') || localStorage.getItem('jobDescription');
       if (storedJobDescription) {
@@ -176,57 +168,31 @@ export default function PracticeInterviewPage() {
     }
   };
 
-  // Separate useEffect for initializing practice session after agent is selected
-  useEffect(() => {
-    if (isAuthenticated && selectedAgent) {
-      initializePracticeSession();
-    }
-  }, [isAuthenticated, selectedAgent]);
-
-  const initializePracticeSession = async () => {
+  const initializePracticeSession = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Create a practice session with mock data
+      // Load questions from localStorage for this session
+      let sessionQuestions: Question[] = [];
+      try {
+        const storedQuestions = localStorage.getItem('generatedQuestions');
+        if (storedQuestions) {
+          sessionQuestions = JSON.parse(storedQuestions);
+        }
+      } catch (error) {
+        console.error('Error loading questions from localStorage:', error);
+      }
+
+      // Create a local practice session with questions from localStorage
       const practiceSession: PracticeSession = {
         id: `session-${Date.now()}`,
-        questions: mockQuestions,
+        questions: sessionQuestions,
         agent_id: selectedAgent?.agent_id || 'mock-agent-id',
         agent_name: selectedAgent?.name || 'Practice Interviewer',
         selectedAgent: selectedAgent,
         status: 'preparing'
       };
-
-      // Save practice session to database
-      try {
-        const sessionResponse = await fetch('/api/practice-sessions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            session_name: `Practice with ${selectedAgent?.name || 'Interviewer'}`,
-            agent_id: selectedAgent?.agent_id,
-            agent_name: selectedAgent?.name,
-            questions: mockQuestions,
-            user_name: process.env.NODE_ENV === 'development' ? 'Peter Lee' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'),
-            call_id: retellResponse.call_id
-          }),
-        });
-
-        if (sessionResponse.ok) {
-          const sessionData = await sessionResponse.json();
-          console.log('Practice session saved to database:', sessionData);
-          
-          // Update session with database ID
-          practiceSession.id = sessionData.session.id;
-        } else {
-          console.warn('Failed to save practice session to database, using local session');
-        }
-      } catch (dbError) {
-        console.warn('Database error, using local session:', dbError);
-      }
 
       setSession(practiceSession);
 
@@ -239,7 +205,14 @@ export default function PracticeInterviewPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedAgent, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Separate useEffect for initializing practice session after agent is selected
+  useEffect(() => {
+    if (isAuthenticated && selectedAgent) {
+      initializePracticeSession();
+    }
+  }, [isAuthenticated, selectedAgent, initializePracticeSession]);
 
   const initializeRetellClient = async (practiceSession: PracticeSession) => {
     try {
@@ -253,9 +226,10 @@ export default function PracticeInterviewPage() {
           questions: practiceSession.questions,
           candidate_name: process.env.NODE_ENV === 'development' ? 'Peter Lee' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Candidate'),
           interview_type: 'practice',
-          focus_areas: selectedAgent?.specialties?.join(', ') || 'general interview skills',
+          focus_areas: practiceSession.selectedAgent?.specialties?.join(', ') || 'general interview skills',
           duration: '15-20 minutes',
-          agent_id: selectedAgent?.agent_id || process.env.PRACTICE_AGENT_ID
+          agent_id: practiceSession.agent_id || process.env.PRACTICE_AGENT_ID,
+          resume_from_question: 0
         }),
       });
 
@@ -264,7 +238,7 @@ export default function PracticeInterviewPage() {
       }
 
       const data = await response.json();
-      console.log('Practice call registered:', data);
+      console.log('Practice call registered successfully');
 
       // Update session with call details
       setSession(prev => prev ? {
@@ -274,10 +248,42 @@ export default function PracticeInterviewPage() {
         status: 'active'
       } : null);
 
+      // Create a DB record for this practice session so we can fetch logs later
+      try {
+        const sessionName = `Practice with ${practiceSession.agent_name} — ${new Date().toLocaleString()}`;
+        const sessionData = {
+          interview_id: null,
+          session_name: sessionName,
+          agent_id: practiceSession.agent_id,
+          agent_name: practiceSession.agent_name,
+          questions: practiceSession.questions,
+          call_id: data.registerCallResponse?.call_id,
+          retell_agent_id: practiceSession.selectedAgent?.agent_id || practiceSession.agent_id,
+          retell_call_id: data.registerCallResponse?.call_id,
+        };
+        // Save session with questions to database
+        const createRes = await fetch('/api/practice-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sessionData)
+        });
+        if (createRes.ok) {
+          const { session: created } = await createRes.json();
+          setSession(prev => prev ? { ...prev, id: created.id } as PracticeSession : prev);
+          setCreatedInDb(true);
+        }
+      } catch (e) {
+        console.warn('Failed to create practice session record:', e);
+      }
+
       // Check if we're in development mode with mock data
       if (data.note && data.note.includes('Mock response')) {
-        console.log('Development mode: Using mock voice interview simulation');
-        // Don't initialize real Retell client in development
+        console.log('Development mode: Retell unavailable; skipping local audio as requested');
+        // Do not play local audio; keep UI active but without audio output
+        setIsCallStarted(true);
+        setIsCalling(true);
+        setActiveTurn('agent');
+
         return;
       }
 
@@ -297,11 +303,21 @@ export default function PracticeInterviewPage() {
     }
   };
 
+  // Removed local mock playback to ensure we only use Retell audio.
+
   const setupRetellEventHandlers = (webClient: any) => {
     webClient.on("call_started", () => {
       console.log("Practice interview started");
       setIsCalling(true);
       setIsCallStarted(true);
+      // Persist status change
+      if (session?.id) {
+        fetch('/api/practice-sessions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, status: 'active' })
+        }).catch(() => undefined);
+      }
       toast({
         title: "Interview Started",
         description: "Your practice interview is now active. The AI interviewer will begin speaking shortly.",
@@ -313,6 +329,14 @@ export default function PracticeInterviewPage() {
       setIsCalling(false);
       setIsVoiceEnabled(false);
       setIsCallStarted(false);
+      // Mark session completed with end time and latest questions
+      if (session?.id) {
+        fetch('/api/practice-sessions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, status: 'completed', end_time: new Date().toISOString(), questions: session.questions })
+        }).catch(() => undefined);
+      }
       toast({
         title: "Interview Ended",
         description: "Your practice interview has concluded. You can review your performance in the analytics section.",
@@ -379,7 +403,43 @@ export default function PracticeInterviewPage() {
           description: "You have already completed this practice session.",
           variant: "destructive",
         });
-        return;
+        
+return;
+      }
+
+      // If a DB record was not created during call registration, create one now
+      let sessionId = session.id;
+      if (!createdInDb && (!sessionId || sessionId.startsWith('session-'))) {
+        try {
+          const sessionResponse = await fetch('/api/practice-sessions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              session_name: `Practice with ${session.agent_name} — ${new Date().toLocaleString()}`,
+              agent_id: session.agent_id,
+              agent_name: session.agent_name,
+              questions: session.questions,
+              call_id: session.call_id || '',
+              retell_agent_id: session.agent_id,
+              retell_call_id: session.call_id || '',
+              status: 'preparing'
+            }),
+          });
+
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json();
+            console.log('Practice session saved to database successfully');
+            sessionId = sessionData.session.id;
+            setSession(prev => prev ? { ...prev, id: sessionId } : null);
+            setCreatedInDb(true);
+          } else {
+            console.warn('Failed to save practice session to database');
+          }
+        } catch (dbError) {
+          console.warn('Database error:', dbError);
+        }
       }
 
       // Check if we're in development mode (no real Retell client)
@@ -388,7 +448,7 @@ export default function PracticeInterviewPage() {
         
         // Store email for duplicate prevention
         emails.push(userEmail);
-        localStorage.setItem(`practice-session-${session.id}-emails`, JSON.stringify(emails));
+        localStorage.setItem(`practice-session-${sessionId}-emails`, JSON.stringify(emails));
         
         // Simulate the interview start
         setTimeout(() => {
@@ -414,7 +474,7 @@ export default function PracticeInterviewPage() {
 
       // Store email for duplicate prevention
       emails.push(userEmail);
-      localStorage.setItem(`practice-session-${session.id}-emails`, JSON.stringify(emails));
+      localStorage.setItem(`practice-session-${sessionId}-emails`, JSON.stringify(emails));
 
       console.log('Starting voice interview...');
       setIsCalling(true);
@@ -470,9 +530,9 @@ export default function PracticeInterviewPage() {
         }
       }
       
-      // Store call ID for results page
-      if (session?.call_id) {
-        localStorage.setItem('lastCallId', session.call_id);
+      // Store session ID for results page (not the sensitive call_id)
+      if (session?.id) {
+        localStorage.setItem('lastSessionId', session.id);
       }
 
       toast({
@@ -493,7 +553,8 @@ export default function PracticeInterviewPage() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    
+return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const openSharePopup = () => {
@@ -508,7 +569,7 @@ export default function PracticeInterviewPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -519,7 +580,7 @@ export default function PracticeInterviewPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
           <p className="mt-4 text-gray-600">Preparing your practice interview...</p>
         </div>
       </div>
@@ -536,8 +597,8 @@ export default function PracticeInterviewPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Setup Error</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => window.location.reload()}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
+            onClick={() => window.location.reload()}
           >
             Try Again
           </button>
@@ -559,8 +620,8 @@ export default function PracticeInterviewPage() {
             Each email can only take the practice interview once.
           </p>
           <button
-            onClick={() => router.push('/dashboard')}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
+            onClick={() => router.push('/dashboard')}
           >
             Back to Dashboard
           </button>
@@ -571,12 +632,16 @@ export default function PracticeInterviewPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
+      {/* Navigation Bar */}
+      <Navbar />
+      
+      {/* Page Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
-            onClick={() => router.back()}
+            aria-label="Go back to previous page"
             className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
+            onClick={() => router.back()}
           >
             <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
           </button>
@@ -587,15 +652,16 @@ export default function PracticeInterviewPage() {
             </p>
           </div>
           <button
-            onClick={openSharePopup}
+            aria-label="Share practice session"
             className="p-2 rounded-lg hover:bg-gray-100"
+            onClick={openSharePopup}
           >
             <ShareIcon className="w-5 h-5 text-gray-600" />
           </button>
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 pt-24 sm:pt-20">
         {/* Reuse Session Indicator */}
         {isReuseSession && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -606,7 +672,7 @@ export default function PracticeInterviewPage() {
               <div className="flex-1">
                 <h3 className="font-medium text-blue-900">Reusing Previous Questions</h3>
                 <p className="text-sm text-blue-700">
-                  You're practicing with the same interview questions from your previous session.
+                  You&apos;re practicing with the same interview questions from your previous session.
                 </p>
                 {jobDescription && (
                   <p className="text-xs text-blue-600 mt-1">
@@ -630,8 +696,8 @@ export default function PracticeInterviewPage() {
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">
                                          Ready to Practice, {process.env.NODE_ENV === 'development' ? 'Peter' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there')}?
                   </h2>
-                  <p className="text-gray-600 mb-4">
-                    You'll be interviewed by an AI agent using the questions generated from your document.
+                  <p className="text-gray-600 mb-4" id="interview-description">
+                    You&apos;ll be interviewed by an AI agent using the questions generated from your document.
                     This is a voice-based interview - just like a real phone interview!
                   </p>
                 </div>
@@ -649,41 +715,35 @@ export default function PracticeInterviewPage() {
                 {/* Agent Selection */}
                 <div className="space-y-3">
                   {selectedAgent ? (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                            <span className="text-lg font-semibold text-blue-600">
-                              {selectedAgent.name.charAt(0)}
-                            </span>
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-green-900">Selected Interviewer</h3>
-                            <p className="text-sm text-green-800">{selectedAgent.name}</p>
-                            <p className="text-xs text-green-700">{selectedAgent.description}</p>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                {selectedAgent.category}
-                              </span>
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                {selectedAgent.difficulty}
-                              </span>
-                            </div>
-                          </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center" role="region" aria-label={`Selected interviewer: ${selectedAgent.name}`}>
+                      <div className="flex items-center justify-center gap-3 mb-1">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center" aria-hidden="true">
+                          <span className="text-lg font-semibold text-blue-600">{selectedAgent.name.charAt(0)}</span>
                         </div>
+                        <h3 className="text-base font-semibold text-green-900">Selected Interviewer</h3>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 mt-1 mb-1">
+                        <p className="text-sm text-green-800">{selectedAgent.name}</p>
                         <button
+                          className="text-xs text-green-700 hover:text-green-800 underline px-2 py-1 rounded hover:bg-green-100"
+                          aria-label={`Change selected interviewer from ${selectedAgent.name} (currently ${selectedAgent.category} level ${selectedAgent.difficulty})`}
                           onClick={() => setShowAgentSelector(true)}
-                          className="text-sm text-green-700 hover:text-green-800 underline"
                         >
-                          Change
+                          Change Interviewer
                         </button>
+                      </div>
+                      <p className="text-xs text-green-700 mb-2">{selectedAgent.description}</p>
+                      <div className="flex items-center justify-center space-x-2" role="group" aria-label={`${selectedAgent.name} details`}>
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">{selectedAgent.category}</span>
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">{selectedAgent.difficulty}</span>
                       </div>
                     </div>
                   ) : (
                     <motion.button
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowAgentSelector(true)}
                       className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
+                      aria-label="Choose your AI interviewer for the practice interview"
+                      onClick={() => setShowAgentSelector(true)}
                     >
                       Choose Your Interviewer
                     </motion.button>
@@ -694,13 +754,18 @@ export default function PracticeInterviewPage() {
 
                 <motion.button
                   whileTap={{ scale: 0.95 }}
-                  onClick={startVoiceInterview}
                   disabled={isLoading}
                   className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold shadow-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label={isLoading 
+                    ? "Connecting to voice interview with selected interviewer" 
+                    : `Start voice interview with ${selectedAgent?.name || 'AI interviewer'} using ${session?.questions?.length || 0} generated questions`
+                  }
+                  aria-describedby="interview-description"
+                  onClick={startVoiceInterview}
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center space-x-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" aria-hidden="true" />
                       <span>Connecting...</span>
                     </div>
                   ) : (
@@ -710,24 +775,27 @@ export default function PracticeInterviewPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-2">
-                  <div className={`w-4 h-4 rounded-full ${isCalling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                <div className="flex items-center justify-center space-x-2" role="status" aria-live="polite">
+                  <div className={`w-4 h-4 rounded-full ${isCalling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} aria-hidden="true" />
                   <span className="text-lg font-semibold text-gray-900">
                     {isCalling ? 'Interview Active' : 'Interview Paused'}
                   </span>
                   {!webClientRef.current && (
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                    <span 
+                      className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
+                      aria-label="Currently in mock mode - no real voice connection"
+                    >
                       Mock Mode
                     </span>
                   )}
                 </div>
 
                 {/* Conversation Display */}
-                <div className="bg-gray-50 rounded-lg p-4 min-h-[200px] max-h-[300px] overflow-y-auto">
+                <div className="bg-gray-50 rounded-lg p-4 min-h-[200px] max-h-[300px] overflow-y-auto" role="log" aria-label="Interview conversation">
                   <div className="space-y-3">
                     {lastAgentResponse && (
-                      <div className="flex items-start space-x-3">
-                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <div className="flex items-start space-x-3" role="article" aria-label={`AI interviewer response: ${lastAgentResponse}`}>
+                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0" aria-hidden="true">
                           <span className="text-white text-sm font-medium">AI</span>
                         </div>
                         <div className="bg-white rounded-lg p-3 shadow-sm flex-1">
@@ -738,14 +806,14 @@ export default function PracticeInterviewPage() {
                     )}
                     
                     {lastUserResponse && (
-                      <div className="flex items-start space-x-3 justify-end">
+                      <div className="flex items-start space-x-3 justify-end" role="article" aria-label={`Your response: ${lastUserResponse}`}>
                         <div className="bg-blue-600 rounded-lg p-3 shadow-sm flex-1">
                           <p className="text-white text-sm">{lastUserResponse}</p>
                           <p className="text-xs text-blue-200 mt-1">
                             {process.env.NODE_ENV === 'development' ? 'Peter Lee' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You')}
                           </p>
                         </div>
-                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0" aria-hidden="true">
                           <span className="text-white text-sm font-medium">
                             {process.env.NODE_ENV === 'development' ? 'P' : (user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U')}
                           </span>
@@ -756,35 +824,46 @@ export default function PracticeInterviewPage() {
                 </div>
 
                 {/* Voice Controls */}
-                <div className="flex items-center justify-center space-x-4">
+                <div className="flex items-center justify-center space-x-4" role="group" aria-label="Voice interview status">
                   <div className="text-center">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      activeTurn === 'agent' ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}>
+                    <div 
+                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        activeTurn === 'agent' ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                      aria-hidden="true"
+                    >
                       <SpeakerWaveIcon className={`w-6 h-6 ${
                         activeTurn === 'agent' ? 'text-white' : 'text-gray-500'
                       }`} />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">AI Speaking</p>
+                    <p className="text-xs text-gray-500 mt-1" aria-live="polite">
+                      {activeTurn === 'agent' ? 'AI Speaking' : 'AI Speaking (inactive)'}
+                    </p>
                   </div>
                   
                   <div className="text-center">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      activeTurn === 'user' ? 'bg-green-600' : 'bg-gray-200'
-                    }`}>
+                    <div 
+                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        activeTurn === 'user' ? 'bg-green-600' : 'bg-gray-200'
+                      }`}
+                      aria-hidden="true"
+                    >
                       <MicrophoneIcon className={`w-6 h-6 ${
                         activeTurn === 'user' ? 'text-white' : 'text-gray-500'
                       }`} />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Your Turn</p>
+                    <p className="text-xs text-gray-500 mt-1" aria-live="polite">
+                      {activeTurn === 'user' ? 'Your Turn' : 'Your Turn (inactive)'}
+                    </p>
                   </div>
                 </div>
 
                 {/* End Interview Button */}
                 <motion.button
                   whileTap={{ scale: 0.95 }}
-                  onClick={endVoiceInterview}
                   className="w-full bg-red-600 text-white py-3 px-6 rounded-xl font-semibold shadow-lg hover:bg-red-700"
+                  aria-label="End the current voice interview session"
+                  onClick={endVoiceInterview}
                 >
                   End Interview
                 </motion.button>
@@ -796,22 +875,46 @@ export default function PracticeInterviewPage() {
         {/* Questions Preview */}
         {session && (
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-4">Interview Questions</h3>
-            <div className="space-y-3">
+            <h3 className="font-semibold text-gray-900 mb-4" id="interview-questions-heading">Interview Questions</h3>
+            <div className="space-y-3" role="list" aria-labelledby="interview-questions-heading">
               {session.questions.map((question, index) => (
-                <div key={question.id} className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div 
+                  key={question.id} 
+                  className="flex items-start space-x-3"
+                  role="listitem"
+                  aria-label={`Question ${index + 1} of ${session.questions.length}: ${question.text}. Type: ${question.type.replace('-', ' ')}. Difficulty: ${question.difficulty}. Category: ${question.category || 'General'}`}
+                >
+                  <div 
+                    className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  >
                     <span className="text-blue-600 text-xs font-medium">{index + 1}</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-900 text-sm leading-relaxed">{question.text}</p>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                    <p className="text-gray-900 text-sm leading-relaxed" id={`question-${question.id}`}>
+                      {question.text}
+                    </p>
+                    <div className="flex items-center space-x-2 mt-2" role="group" aria-label={`Question ${index + 1} metadata`}>
+                      <span 
+                        className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800"
+                        aria-label={`Question type: ${question.type.replace('-', ' ')}`}
+                      >
                         {question.type.replace('-', ' ')}
                       </span>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                      <span 
+                        className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
+                        aria-label={`Difficulty level: ${question.difficulty}`}
+                      >
                         {question.difficulty}
                       </span>
+                      {question.category && (
+                        <span 
+                          className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800"
+                          aria-label={`Category: ${question.category}`}
+                        >
+                          {question.category}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -830,15 +933,15 @@ export default function PracticeInterviewPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Choose Your Interviewer</h2>
                 <button
-                  onClick={() => setShowAgentSelector(false)}
                   className="p-2 hover:bg-gray-100 rounded-lg"
+                  onClick={() => setShowAgentSelector(false)}
                 >
                   <XMarkIcon className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
               <VoiceAgentSelector
-                onAgentSelect={handleAgentSelect}
                 selectedAgentId={selectedAgent?.agent_id}
+                onAgentSelect={handleAgentSelect}
               />
             </div>
           </div>
@@ -853,6 +956,22 @@ export default function PracticeInterviewPage() {
           onClose={closeSharePopup}
         />
       )}
+
+      {/* Help Button: keep consistent with main page (mobile uses nav "?", desktop shows floating sm) */}
+      <div className="hidden sm:block">
+        <HelpButton 
+          variant="floating" 
+          position="bottom-right" 
+          size="sm"
+        />
+      </div>
+
+      {/* Onboarding Modal */}
+      <WelcomeModal
+        isOpen={showOnboarding}
+        isFirstTime={isFirstTime}
+        onClose={hideOnboardingModal}
+      />
     </div>
   );
 } 

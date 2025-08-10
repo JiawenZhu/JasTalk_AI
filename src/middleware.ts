@@ -11,7 +11,7 @@ const publicRoutes = [
   '/auth/reset-password',
   '/demo',
   '/premium',
-  '/questions',
+  '/jastalk-landing',
   '/coding-demo',
   '/voice-demo',
   '/api/register-call',
@@ -31,6 +31,7 @@ const protectedRoutes = [
   '/call',
   '/upload',
   '/practice',
+  '/questions/generate',
   '/analytics',
   '/api/create-interview',
   '/api/delete-interview',
@@ -59,6 +60,11 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession()
 
   const { pathname } = req.nextUrl
+
+  // Special handling for root path - let the client handle the redirect
+  if (pathname === '/') {
+    return res
+  }
 
   // Check if the route is public
   const isPublicRoute = publicRoutes.some(route => 

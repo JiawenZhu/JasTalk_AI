@@ -7,21 +7,20 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FoloUp",
-  description: "AI powered Interviews",
+  title: "JasTalk AI",
+  description: "AI-Powered Interview Practice",
   openGraph: {
-    title: "FoloUp",
-    description: "AI-powered Interviews",
-    siteName: "FoloUp",
+    title: "JasTalk AI",
+    description: "AI-Powered Interview Practice",
+    siteName: "JasTalk AI",
     images: [
       {
-        url: "/foloup.png",
-        width: 800,
-        height: 600,
+        url: "/jastalk.png",
+        width: 1200,
+        height: 630,
+        alt: "JasTalk AI",
       },
     ],
-    locale: "en_US",
-    type: "website",
   },
 };
 

@@ -266,6 +266,11 @@ export default function QuestionGenerationPage() {
       localStorage.setItem('jobDescription', jobDescription);
     }
     
+    // Store current questions for practice session
+    if (questions.length > 0) {
+      localStorage.setItem('generatedQuestions', JSON.stringify(questions));
+    }
+    
     // Navigate to practice session
     router.push('/practice/new');
   };
@@ -476,6 +481,19 @@ export default function QuestionGenerationPage() {
         {/* Questions List */}
         {!isGenerating && questions.length > 0 && (
           <div className="space-y-4">
+            {/* Top Start Practice Button */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleStartPractice}
+                className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold shadow-lg hover:bg-blue-700 flex items-center justify-center space-x-2"
+                aria-label="Start practice interview with the generated questions"
+              >
+                <MicrophoneIcon className="w-5 h-5" aria-hidden="true" />
+                <span>Start Practice Interview</span>
+              </motion.button>
+            </div>
+
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
                 {questions.length} Questions Generated
@@ -494,16 +512,24 @@ export default function QuestionGenerationPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className="bg-white rounded-xl p-4 shadow-sm border border-gray-200"
+                role="article"
+                aria-label={`Generated question ${index + 1} of ${questions.length}: ${question.text}. Type: ${question.type.replace('-', ' ')}. Difficulty: ${question.difficulty}. Category: ${question.category || 'General'}`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-500">
                       #{index + 1}
                     </span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(question.type)}`}>
+                    <span 
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(question.type)}`}
+                      aria-label={`Question type: ${question.type.replace('-', ' ')}`}
+                    >
                       {question.type.replace('-', ' ')}
                     </span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getDifficultyColor(question.difficulty)}`}>
+                    <span 
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${getDifficultyColor(question.difficulty)}`}
+                      aria-label={`Difficulty level: ${question.difficulty}`}
+                    >
                       {question.difficulty}
                     </span>
                   </div>
@@ -511,14 +537,16 @@ export default function QuestionGenerationPage() {
                     <button
                       onClick={() => handleEditQuestion(question.id)}
                       className="p-1 text-gray-400 hover:text-gray-600"
+                      aria-label={`Edit question ${index + 1}`}
                     >
-                      <PencilIcon className="w-4 h-4" />
+                      <PencilIcon className="w-4 h-4" aria-hidden="true" />
                     </button>
                     <button
                       onClick={() => handleRemoveQuestion(question.id)}
                       className="p-1 text-gray-400 hover:text-red-600"
+                      aria-label={`Remove question ${index + 1}`}
                     >
-                      <XMarkIcon className="w-4 h-4" />
+                      <XMarkIcon className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>

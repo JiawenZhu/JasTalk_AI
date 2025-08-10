@@ -1,11 +1,11 @@
-import { createServerClient } from '@/lib/supabase';
+import { createClientClient } from '@/lib/supabase-client';
 import { CodingQuestion, InterviewCodingQuestion, DifficultyLevel } from '@/types/interview';
 
 export class CodingQuestionsService {
   // Get all coding questions from the pool
   static async getAllCodingQuestions(): Promise<CodingQuestion[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .select('*')
@@ -27,7 +27,7 @@ export class CodingQuestionsService {
   // Get coding questions by difficulty
   static async getCodingQuestionsByDifficulty(difficulty: DifficultyLevel): Promise<CodingQuestion[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .select('*')
@@ -50,7 +50,7 @@ export class CodingQuestionsService {
   // Get coding questions by topic
   static async getCodingQuestionsByTopic(topic: string): Promise<CodingQuestion[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .select('*')
@@ -73,7 +73,7 @@ export class CodingQuestionsService {
   // Get coding questions for a specific interview
   static async getCodingQuestionsForInterview(interviewId: string): Promise<InterviewCodingQuestion[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('interview_coding_question')
         .select(`
@@ -102,7 +102,7 @@ export class CodingQuestionsService {
     codingQuestionIds: string[]
   ): Promise<void> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       
       // First, remove existing coding questions for this interview
       await supabase
@@ -155,7 +155,7 @@ export class CodingQuestionsService {
   // Create a new coding question (for admins)
   static async createCodingQuestion(question: Omit<CodingQuestion, 'id' | 'created_at'>): Promise<CodingQuestion> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .insert([question])
@@ -177,7 +177,7 @@ export class CodingQuestionsService {
   // Get available topics
   static async getAvailableTopics(): Promise<string[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .select('topic')
@@ -200,7 +200,7 @@ export class CodingQuestionsService {
   // Get available companies
   static async getAvailableCompanies(): Promise<string[]> {
     try {
-      const supabase = createServerClient();
+      const supabase = createClientClient();
       const { data, error } = await supabase
         .from('coding_question')
         .select('company_origin')

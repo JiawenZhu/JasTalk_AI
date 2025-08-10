@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
 import { useInterviewers } from "@/contexts/interviewers.context";
 import { toast } from "@/components/ui/use-toast";
+import { useDispatch } from 'react-redux';
+import { setSelectedInterviewer } from '@/store/interviewerSlice';
 
 interface VoiceAgent {
   agent_id: string;
@@ -33,19 +35,22 @@ export default function InterviewersPage() {
   const [contentReady, setContentReady] = useState(false);
   const [retellAgents, setRetellAgents] = useState<VoiceAgent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
+  const dispatch = useDispatch();
 
   // Set content ready after initial load
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/sign-in');
-      return;
+      
+return;
     }
 
     if (!interviewersLoading) {
       const timer = setTimeout(() => {
         setContentReady(true);
       }, 100);
-      return () => clearTimeout(timer);
+      
+return () => clearTimeout(timer);
     }
   }, [isAuthenticated, router, interviewersLoading]);
 
@@ -76,7 +81,20 @@ export default function InterviewersPage() {
       const data = await response.json();
 
       if (data.success) {
-        setRetellAgents(data.agents);
+        // Client-side safety de-duplication in case server didn't filter, or if future changes re-introduce duplicates.
+        const seen = new Set<string>();
+        const uniqueAgents = (data.agents as VoiceAgent[]).filter((a: any) => {
+          const agentType = (a.agent_type || a.category || 'unknown').toString().toLowerCase();
+          const key = `${(a.name || '').toLowerCase().trim()}|${agentType}|${(a.voice_id || 'default-voice').toLowerCase()}`;
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+
+          return true;
+        });
+
+        setRetellAgents(uniqueAgents);
         console.log('Retell agents loaded:', data.agents.length);
       } else {
         console.error('Failed to load Retell agents:', data.error);
@@ -121,6 +139,8 @@ export default function InterviewersPage() {
     
     // Store the selected agent in localStorage for the dashboard
     localStorage.setItem('selectedDashboardAgent', JSON.stringify(agent));
+    // Sync to Redux
+    dispatch(setSelectedInterviewer(agent));
     
     toast({
       title: "Interviewer Selected",
@@ -131,6 +151,8 @@ export default function InterviewersPage() {
   const handlePreviewVoice = (agent: VoiceAgent) => {
     // Store the selected agent in localStorage for the practice session
     localStorage.setItem('selectedPracticeAgent', JSON.stringify(agent));
+    // Sync to Redux
+    dispatch(setSelectedInterviewer(agent));
     
     toast({
       title: "Voice Preview",
@@ -147,10 +169,10 @@ export default function InterviewersPage() {
         {[1, 2, 3].map((i) => (
           <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse"></div>
+              <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                <div className="h-3 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded animate-pulse" />
+                <div className="h-3 bg-gray-200 rounded w-3/4 animate-pulse" />
               </div>
             </div>
           </div>
@@ -163,7 +185,7 @@ export default function InterviewersPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -176,20 +198,20 @@ export default function InterviewersPage() {
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex items-center justify-between">
           <button
-            onClick={() => router.back()}
             className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
+            onClick={() => router.back()}
           >
             <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
           </button>
           <div className="text-center">
             <h1 className="text-lg font-semibold text-gray-900">Interviewers</h1>
             <p className="text-sm text-gray-500">
-              {interviewers.length} AI Interviewers Available
+              {agentsLoading ? 0 : retellAgents.length} AI Interviewers Available
             </p>
           </div>
           <button
-            onClick={handleSyncAgents}
             className="p-2 rounded-lg hover:bg-gray-100"
+            onClick={handleSyncAgents}
           >
             <ArrowPathIcon className="w-5 h-5 text-gray-600" />
           </button>
@@ -217,7 +239,7 @@ export default function InterviewersPage() {
           
           <div className="grid grid-cols-2 gap-4 text-center">
             <div className="bg-white/10 rounded-lg p-3">
-              <div className="text-2xl font-bold">{interviewers.length}</div>
+              <div className="text-2xl font-bold">{agentsLoading ? 0 : retellAgents.length}</div>
               <div className="text-xs text-blue-100">Available</div>
             </div>
             <div className="bg-white/10 rounded-lg p-3">
@@ -236,8 +258,8 @@ export default function InterviewersPage() {
         >
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={() => router.push('/upload')}
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-left hover:shadow-md transition-shadow"
+            onClick={() => router.push('/upload')}
           >
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
               <PlusIcon className="w-5 h-5 text-blue-600" />
@@ -248,14 +270,14 @@ export default function InterviewersPage() {
 
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={handleSyncAgents}
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-left hover:shadow-md transition-shadow"
+            onClick={handleSyncAgents}
           >
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-3">
               <SparklesIcon className="w-5 h-5 text-purple-600" />
             </div>
             <h3 className="font-semibold text-gray-900 text-sm">Sync Agents</h3>
-            <p className="text-xs text-gray-500 mt-1">Update from Retell AI</p>
+            <p className="text-xs text-gray-500 mt-1">Refresh interviewers list</p>
           </motion.button>
         </motion.div>
 
@@ -269,7 +291,7 @@ export default function InterviewersPage() {
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">Available Interviewers</h3>
             <span className="text-sm text-gray-500">
-              {interviewers.length} of {interviewers.length}
+              {agentsLoading ? 0 : retellAgents.length} of {agentsLoading ? 0 : retellAgents.length}
             </span>
           </div>
 
@@ -287,8 +309,8 @@ export default function InterviewersPage() {
                 Get started by syncing your AI interviewers from Retell AI
               </p>
               <button
-                onClick={handleSyncAgents}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+                onClick={handleSyncAgents}
               >
                 Sync Interviewers
               </button>
@@ -303,8 +325,8 @@ export default function InterviewersPage() {
                   transition={{ delay: 0.1 * index }}
                   className="bg-white rounded-xl p-4 shadow-sm border border-gray-200"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center space-x-4 flex-1">
                       <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
                         <span className="text-lg font-semibold text-blue-600">
                           {agent.name.charAt(0)}
@@ -323,24 +345,24 @@ export default function InterviewersPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleSelectInterviewer(agent)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          selectedAgentId === agent.agent_id
-                            ? 'bg-green-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {selectedAgentId === agent.agent_id ? 'Selected' : 'Select'}
-                      </button>
-                      <button
-                        onClick={() => handlePreviewVoice(agent)}
-                        className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                      >
-                        Preview Voice
-                      </button>
-                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <button
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        selectedAgentId === agent.agent_id
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      onClick={() => handleSelectInterviewer(agent)}
+                    >
+                      {selectedAgentId === agent.agent_id ? 'Selected' : 'Select'}
+                    </button>
+                    <button
+                      className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                      onClick={() => handlePreviewVoice(agent)}
+                    >
+                      Open Last Interview
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -357,15 +379,15 @@ export default function InterviewersPage() {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full" />
               <div>
                 <h4 className="font-medium text-gray-900 text-sm">Sync Status</h4>
                 <p className="text-xs text-gray-500">All agents up to date</p>
               </div>
             </div>
             <button
-              onClick={handleSyncAgents}
               className="text-blue-600 text-sm font-medium hover:text-blue-700"
+              onClick={handleSyncAgents}
             >
               Sync Now
             </button>

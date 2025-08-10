@@ -130,8 +130,8 @@ export default function SignUpPage() {
           <CardHeader className="text-center space-y-2">
             <div className="flex justify-center mb-4">
               <Image
-                src="/FoloUp.png"
-                alt="FoloUp Logo"
+                src="/jastalk.png"
+                alt="JasTalk AI Logo"
                 width={120}
                 height={40}
                 className="h-10 w-auto"
@@ -141,7 +141,7 @@ export default function SignUpPage() {
               Create your account
             </CardTitle>
             <CardDescription className="text-gray-600">
-              Join FoloUp to start conducting AI-powered interviews
+              Join JasTalk AI to start conducting AI-powered interviews
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
