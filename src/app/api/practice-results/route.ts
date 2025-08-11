@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get URL parameters
-    const { searchParams } = new URL(request.url);
+    // Get URL parameters (use NextRequest.nextUrl to avoid Invalid URL errors on edge)
+    const { searchParams } = request.nextUrl;
     const sessionId = searchParams.get('sessionId');
     const callId = searchParams.get('callId');
 

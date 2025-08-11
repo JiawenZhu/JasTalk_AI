@@ -14,10 +14,11 @@ export async function GET(req: Request) {
 
     if (error) {
       console.error("Error fetching voice agents:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch voice agents" },
-        { status: 500 }
-      );
+      // If table is missing (42P01), return empty list gracefully
+      if ((error as any).code === '42P01') {
+        return NextResponse.json({ success: true, agents: [] });
+      }
+      return NextResponse.json({ error: "Failed to fetch voice agents" }, { status: 500 });
     }
 
     return NextResponse.json({

@@ -1,4 +1,5 @@
 import { createClientClient } from "@/lib/supabase-client";
+import { createServerClient } from "@/lib/supabase";
 
 // Initialize Supabase client lazily to avoid build-time errors
 let supabaseClient: any = null;
@@ -8,7 +9,11 @@ const getSupabaseClient = () => {
     return supabaseClient;
   }
   
-  supabaseClient = createClientClient();
+  if (typeof window !== 'undefined') {
+    supabaseClient = createClientClient();
+  } else {
+    supabaseClient = createServerClient();
+  }
   
   return supabaseClient;
 };

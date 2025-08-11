@@ -52,13 +52,27 @@ const protectedRoutes = [
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  
-  const supabase = createMiddlewareClient<Database>({ req, res })
 
-  // Refresh session if expired - required for Server Components
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  // Safely initialize Supabase only if env vars are present
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  let session: any = null
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const supabase = createMiddlewareClient<Database>({ req, res }, {
+        supabaseUrl,
+        supabaseKey: supabaseAnonKey,
+      })
+      const {
+        data: { session: s },
+      } = await supabase.auth.getSession()
+      session = s
+    } catch (e) {
+      // If Supabase init fails, continue without session to avoid middleware crashes
+      session = null
+    }
+  }
 
   const { pathname } = req.nextUrl
 
@@ -77,12 +91,12 @@ export async function middleware(req: NextRequest) {
     res.cookies.set(name, value, { maxAge: cookieMaxAge, sameSite: 'lax', path: '/' })
   }
 
-  if (ref) setCookie('ref', ref)
-  if (utmSource) setCookie('utm_source', utmSource)
-  if (utmMedium) setCookie('utm_medium', utmMedium)
-  if (utmCampaign) setCookie('utm_campaign', utmCampaign)
-  if (utmTerm) setCookie('utm_term', utmTerm)
-  if (utmContent) setCookie('utm_content', utmContent)
+  if (ref) {setCookie('ref', ref)}
+  if (utmSource) {setCookie('utm_source', utmSource)}
+  if (utmMedium) {setCookie('utm_medium', utmMedium)}
+  if (utmCampaign) {setCookie('utm_campaign', utmCampaign)}
+  if (utmTerm) {setCookie('utm_term', utmTerm)}
+  if (utmContent) {setCookie('utm_content', utmContent)}
 
   // Special handling for root path - let the client handle the redirect
   if (pathname === '/') {
