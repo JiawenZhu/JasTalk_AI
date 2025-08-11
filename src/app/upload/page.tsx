@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 
-export const dynamic = 'force-dynamic';
+// Client component; avoid server-only config exports
 
 // Add custom slider styles
 const sliderStyles = `
@@ -46,7 +46,7 @@ interface UploadedFile {
   preview?: string;
 }
 
-export default function UploadPage() {
+function UploadContent() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -508,4 +508,12 @@ export default function UploadPage() {
       </div>
     </div>
   );
-} 
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div><p className="mt-4 text-gray-600">Loading...</p></div></div>}>
+      <UploadContent />
+    </Suspense>
+  );
+}

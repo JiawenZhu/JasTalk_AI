@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         let audioData = null;
         if (session.retell_call_id) {
           try {
-            const audioResponse = await fetch(`${process.env.NEXT_PUBLIC_LIVE_URL}/api/retell-audio?call_id=${session.retell_call_id}`);
+            const audioResponse = await fetch(`${process.env.LIVE_URL}/api/retell-audio?call_id=${session.retell_call_id}`);
             if (audioResponse.ok) {
               audioData = await audioResponse.json();
             }

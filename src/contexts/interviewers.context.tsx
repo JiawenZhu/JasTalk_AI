@@ -70,7 +70,7 @@ export function InterviewerProvider({ children }: InterviewerProviderProps) {
       
       // Check if we're in development mode and don't have a user
       const isSupabaseConfigured = Boolean(
-        process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
       );
 
       if (!isSupabaseConfigured || !user?.id) {
@@ -96,7 +96,7 @@ export function InterviewerProvider({ children }: InterviewerProviderProps) {
     try {
       // Check if we're in development mode
       const isSupabaseConfigured = Boolean(
-        process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
       );
 
       if (!isSupabaseConfigured || !user?.id) {

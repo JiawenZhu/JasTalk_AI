@@ -47,7 +47,7 @@ const InterviewerCard = ({ interviewer }: Props) => {
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor(interviewer.sync_status || 'active')} rounded-full border-2 border-white`}></div>
+            <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor('active')} rounded-full border-2 border-white`}></div>
           </div>
 
           {/* Content */}
@@ -99,11 +99,9 @@ const InterviewerCard = ({ interviewer }: Props) => {
           <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
             Experienced
           </span>
-          {interviewer.sync_status === 'active' && (
-            <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-              Synced
-            </span>
-          )}
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+            Synced
+          </span>
         </div>
       </motion.div>
 

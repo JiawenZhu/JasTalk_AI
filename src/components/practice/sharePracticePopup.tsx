@@ -23,7 +23,7 @@ function SharePracticePopup({ open, onClose, practiceSessionId, questions }: Sha
   const [embedHeight, setEmbedHeight] = useState(735);
 
   useEffect(() => {
-    const baseUrl = process.env.NEXT_PUBLIC_LIVE_URL || window.location.origin;
+    const baseUrl = process.env.LIVE_URL || window.location.origin;
     const practiceURL = `${baseUrl}/practice/shared/${practiceSessionId}`;
     
     if (practiceURL) {

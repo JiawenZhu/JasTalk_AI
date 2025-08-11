@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     });
 
     // Call our internal code analysis API
-    const analysisResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/analyze-code`, {
+    const analysisResponse = await fetch(`${process.env.BASE_URL || 'http://localhost:3000'}/api/analyze-code`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

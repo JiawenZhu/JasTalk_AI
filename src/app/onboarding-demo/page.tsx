@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { 
   SparklesIcon,
@@ -12,6 +12,8 @@ import WelcomeModal from "@/components/onboarding/welcome-modal";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { Button } from "@/components/ui/button";
 
+// Note: client components cannot export route segment config. Avoid SSR-only APIs in render.
+
 export default function OnboardingDemoPage() {
   const { 
     isFirstTime, 
@@ -21,6 +23,18 @@ export default function OnboardingDemoPage() {
     resetOnboarding,
     showOnboardingModal
   } = useOnboarding();
+
+  const [completed, setCompleted] = useState(false);
+  const [visited, setVisited] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        setCompleted(!!localStorage.getItem('onboardingCompleted'));
+        setVisited(!!localStorage.getItem('hasVisitedBefore'));
+      }
+    } catch {}
+  }, [showOnboarding]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
@@ -203,13 +217,13 @@ export default function OnboardingDemoPage() {
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-2xl font-bold text-green-600">
-                {localStorage.getItem('onboardingCompleted') ? "Yes" : "No"}
+                {completed ? "Yes" : "No"}
               </div>
               <div className="text-sm text-green-800">Completed</div>
             </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
               <div className="text-2xl font-bold text-orange-600">
-                {localStorage.getItem('hasVisitedBefore') ? "Yes" : "No"}
+                {visited ? "Yes" : "No"}
               </div>
               <div className="text-sm text-orange-800">Visited Before</div>
             </div>

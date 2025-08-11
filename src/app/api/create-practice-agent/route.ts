@@ -24,14 +24,13 @@ export async function POST(req: Request) {
     console.log("Creating practice agent:", agentName);
 
     try {
-      // Create a new agent in Retell
-      const agent = await retellClient.agent.create({
+      // Create a new agent in Retell (align with current SDK typings)
+      const agent = await (retellClient as any).agent.create({
         agent_name: agentName,
-        agent_description: agentDescription,
-        voice_id: "sarah", // Using a default voice ID
+        voice_id: "sarah",
         llm_websocket_url: "wss://api.retellai.com/agent/llm-stream",
         llm_retell_config: {
-          model: "gpt-4",
+          model: "gpt-4o-mini",
           temperature: 0.7,
           system_prompt: `You are an AI interviewer conducting practice interviews. Your role is to:
 
@@ -58,7 +57,7 @@ Be encouraging and help candidates improve their interview skills.`
         agent: {
           agent_id: agent.agent_id,
           name: agent.agent_name,
-          description: agent.agent_description,
+          description: agent.system_prompt ?? agentDescription,
           voice_id: agent.voice_id,
           created_at: agent.created_at
         },

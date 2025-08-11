@@ -164,12 +164,11 @@ export default function RetakePracticePage({
       const data = await response.json();
       console.log('Practice call registered for retake successfully');
 
-      // Update session with call details
+      // Update session with call details (keep status union type)
       setSession(prev => prev ? {
         ...prev,
         call_id: data.registerCallResponse.call_id,
         access_token: data.registerCallResponse.access_token,
-        status: 'active'
       } : null);
 
       // Check if we're in development mode with mock data

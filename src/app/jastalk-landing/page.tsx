@@ -25,6 +25,7 @@ import {
   SpeakerWaveIcon,
   PauseIcon
 } from '@heroicons/react/24/outline';
+import EmailCaptureModal from '@/components/marketing/EmailCaptureModal';
 
 export default function JasTalkLandingPage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
@@ -109,6 +110,9 @@ export default function JasTalkLandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Email capture modal */}
+      {/* Shows after 15s on first visit */}
+      <EmailCaptureModal />
       {/* Navigation */}
       <nav className={`fixed top-0 w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

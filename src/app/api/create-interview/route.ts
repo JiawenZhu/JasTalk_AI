@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { InterviewService } from "@/services/interviews.service";
 import { logger } from "@/lib/logger";
 
-const base_url = process.env.NEXT_PUBLIC_LIVE_URL;
+const base_url = process.env.LIVE_URL;
 
 export async function POST(req: Request, res: Response) {
   try {

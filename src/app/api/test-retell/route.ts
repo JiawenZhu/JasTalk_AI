@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       console.error("Error importing Retell SDK:", importError);
       return NextResponse.json({
         error: "Failed to import Retell SDK",
-        details: importError.message
+        details: importError instanceof Error ? importError.message : String(importError)
       }, { status: 500 });
     }
 
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
       console.error("Error creating Retell client:", clientError);
       return NextResponse.json({
         error: "Failed to create Retell client",
-        details: clientError.message
+        details: clientError instanceof Error ? clientError.message : String(clientError)
       }, { status: 500 });
     }
 
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
       console.error("Error listing agents:", listError);
       return NextResponse.json({
         error: "Failed to list agents",
-        details: listError.message,
+        details: listError instanceof Error ? listError.message : String(listError),
         note: "This might be due to API permissions or network issues"
       }, { status: 500 });
     }

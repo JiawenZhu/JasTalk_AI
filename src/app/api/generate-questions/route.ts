@@ -621,7 +621,7 @@ function generateDynamicQuestions(jobAnalysis: any, questionCount: number, inter
   
   // If not enough questions after filtering, add more generic ones
   if (filteredQuestions.length < questionCount) {
-    const genericQuestions = [
+    const genericQuestions: Question[] = [
       {
         id: `q${questionId++}`,
         text: 'How would you design a scalable web application that can handle millions of users?',

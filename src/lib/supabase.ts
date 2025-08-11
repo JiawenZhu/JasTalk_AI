@@ -8,8 +8,8 @@ export const createClient = () =>
 
 // Server-side Supabase client (for use in API routes)
 export const createServerClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseUrl = process.env.SUPABASE_URL!
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
   
   return createSupabaseClient<Database>(supabaseUrl, supabaseServiceKey, {
     auth: {
@@ -21,7 +21,7 @@ export const createServerClient = () => {
 
 // Admin client with service role key
 export const createAdminClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseUrl = process.env.SUPABASE_URL!
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   
   return createSupabaseClient<Database>(supabaseUrl, supabaseServiceKey, {

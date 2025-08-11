@@ -137,7 +137,7 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("Error in register-practice-call:", error);
-    logger.error("register-practice-call error:", error);
+    logger.error("register-practice-call error:", error instanceof Error ? { message: error.message, stack: error.stack } : { value: String(error) });
     
     return NextResponse.json(
       { 

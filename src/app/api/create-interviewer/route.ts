@@ -8,6 +8,8 @@ const retellClient = new Retell({
   apiKey: process.env.RETELL_API_KEY || "",
 });
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(res: NextRequest) {
   logger.info("create-interviewer request received");
 

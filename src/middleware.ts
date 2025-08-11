@@ -1,6 +1,7 @@
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import type { Database } from '@/types/database.types'
 
 const publicRoutes = [
   '/',
@@ -52,7 +53,7 @@ const protectedRoutes = [
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   
-  const supabase = createMiddlewareClient({ req, res })
+  const supabase = createMiddlewareClient<Database>({ req, res })
 
   // Refresh session if expired - required for Server Components
   const {
@@ -60,6 +61,28 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession()
 
   const { pathname } = req.nextUrl
+
+  // Persist referral and UTM params into cookies for 90 days
+  const url = new URL(req.url)
+  const ref = url.searchParams.get('ref')
+  const utmSource = url.searchParams.get('utm_source')
+  const utmMedium = url.searchParams.get('utm_medium')
+  const utmCampaign = url.searchParams.get('utm_campaign')
+  const utmTerm = url.searchParams.get('utm_term')
+  const utmContent = url.searchParams.get('utm_content')
+
+  const cookieMaxAge = 60 * 60 * 24 * 90 // 90 days
+  const cookieOptions: Parameters<typeof NextResponse.next>[0] | undefined = undefined
+  const setCookie = (name: string, value: string) => {
+    res.cookies.set(name, value, { maxAge: cookieMaxAge, sameSite: 'lax', path: '/' })
+  }
+
+  if (ref) setCookie('ref', ref)
+  if (utmSource) setCookie('utm_source', utmSource)
+  if (utmMedium) setCookie('utm_medium', utmMedium)
+  if (utmCampaign) setCookie('utm_campaign', utmCampaign)
+  if (utmTerm) setCookie('utm_term', utmTerm)
+  if (utmContent) setCookie('utm_content', utmContent)
 
   // Special handling for root path - let the client handle the redirect
   if (pathname === '/') {

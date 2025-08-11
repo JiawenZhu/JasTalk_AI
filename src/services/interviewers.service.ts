@@ -1,9 +1,19 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database.types";
 
-const supabase = createClientComponentClient();
+// Lazily create a Supabase client appropriate to the runtime (client vs server)
+function getSupabase() {
+  if (typeof window !== 'undefined') {
+    return createClientComponentClient<Database>();
+  }
+  // Server-side: use server client to avoid NEXT_PUBLIC env requirement during build/import
+  const { createServerClient } = require("@/lib/supabase");
+  return createServerClient();
+}
 
 const getAllInterviewers = async (clientId: string = "") => {
   try {
+    const supabase = getSupabase();
     const { data: clientData, error: clientError } = await supabase
       .from("interviewer")
       .select(`*`);
@@ -50,6 +60,7 @@ const getAllInterviewers = async (clientId: string = "") => {
 
 const createInterviewer = async (payload: any) => {
   try {
+    const supabase = getSupabase();
     // Check for existing interviewer with the same name
     const { data: existingInterviewer, error: checkError } = await supabase
       .from("interviewer")
@@ -105,6 +116,7 @@ const createInterviewer = async (payload: any) => {
 
 const getInterviewer = async (interviewerId: bigint) => {
   try {
+    const supabase = getSupabase();
     const { data: interviewerData, error: interviewerError } = await supabase
       .from("interviewer")
       .select("*")

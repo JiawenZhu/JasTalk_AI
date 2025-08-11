@@ -47,7 +47,7 @@ interface Props {
   };
 }
 
-const base_url = process.env.NEXT_PUBLIC_LIVE_URL;
+const base_url = process.env.LIVE_URL;
 
 function InterviewHome({ params, searchParams }: Props) {
   const [interview, setInterview] = useState<Interview>();
