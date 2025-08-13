@@ -237,11 +237,23 @@ export default function PracticeSetupPage() {
 
         {/* Start Interview Button */}
         <div className="text-center mb-8">
+          {!selectedInterviewer && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 text-sm">
+                ⚠️ Please select an interviewer before starting the interview
+              </p>
+            </div>
+          )}
           <Button
             onClick={handleStartInterview}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-semibold w-full max-w-md"
+            disabled={!selectedInterviewer}
+            className={`px-8 py-4 text-lg font-semibold w-full max-w-md ${
+              selectedInterviewer 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
           >
-            Start Voice Interview
+            {selectedInterviewer ? 'Start Voice Interview' : 'Select Interviewer First'}
           </Button>
         </div>
 

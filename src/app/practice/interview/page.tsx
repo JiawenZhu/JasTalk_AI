@@ -510,7 +510,7 @@ export default function PracticeInterviewPage() {
       if (!retellInitialized) {
         console.log('🔄 Retell client failed to initialize, using browser speech fallback...');
         // Generate a response using browser speech
-        const fallbackResponse = `Hello! I'm Lisa, your AI interviewer. Let's begin the practice interview. The first question is: ${session?.questions[0]?.text || 'Tell me about yourself.'}`;
+        const fallbackResponse = `Hello! I'm ${session?.interviewer?.name || 'your AI interviewer'}, your AI interviewer. Let's begin the practice interview. The first question is: ${session?.questions[0]?.text || 'Tell me about yourself.'}`;
         setGeminiResponse(fallbackResponse);
         speakText(fallbackResponse, 'Zephyr');
         return;
@@ -1032,6 +1032,52 @@ export default function PracticeInterviewPage() {
     );
   }
 
+  // Validate that the session has an interviewer
+  if (!session.interviewer || !session.interviewer.name) {
+    return (
+      <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+        <Card className="p-8 text-center">
+          <h2 className="text-xl font-semibold mb-4">Interviewer Not Selected</h2>
+          <p className="text-gray-600 mb-4">Please select an interviewer before starting the interview.</p>
+          <div className="space-y-4">
+            <Button onClick={() => router.push('/practice/setup')}>
+              Select Interviewer
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/practice/new')}
+            >
+              Go to Practice Setup
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Validate that the session has questions
+  if (!session.questions || session.questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+        <Card className="p-8 text-center">
+          <h2 className="text-xl font-semibold mb-4">No Questions Available</h2>
+          <p className="text-gray-600 mb-4">Please generate questions before starting the interview.</p>
+          <div className="space-y-4">
+            <Button onClick={() => router.push('/upload')}>
+              Generate Questions
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/practice/setup')}
+            >
+              Go to Practice Setup
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const currentQuestion = session.questions[currentQuestionIndex];
   const timeRemaining = retellSessionTime;
 
@@ -1423,7 +1469,7 @@ export default function PracticeInterviewPage() {
                                 </div>
                                 <div className="bg-white rounded-lg p-3 shadow-sm flex-1">
                                   <p className="text-gray-900 text-sm">{lastAgentResponse}</p>
-                                  <p className="text-xs text-gray-500 mt-1">Lisa (AI Interviewer)</p>
+                                  <p className="text-xs text-gray-500 mt-1">{session?.interviewer?.name || 'AI Interviewer'}</p>
                                 </div>
                               </div>
                             )}
@@ -1453,7 +1499,7 @@ export default function PracticeInterviewPage() {
                               <Speaker className="w-6 h-6" />
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              {activeTurn === 'agent' ? 'Lisa Speaking' : 'Lisa Speaking (inactive)'}
+                              {activeTurn === 'agent' ? `${session?.interviewer?.name || 'AI'} Speaking` : `${session?.interviewer?.name || 'AI'} Speaking (inactive)`}
                             </p>
                           </div>
                           
