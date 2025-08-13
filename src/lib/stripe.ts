@@ -43,7 +43,7 @@ export const getStripeServer = () => {
     throw new Error('getStripeServer should only be called on the server side');
   }
   return new Stripe(getStripeConfig().secretKey, {
-    apiVersion: '2025-07-30.basil',
+    apiVersion: '2025-07-30.basil' as any,
     typescript: true,
   });
 };
