@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       if (!userId || !packageId || !credits) {
         if (session.line_items && session.line_items.data && session.line_items.data.length > 0) {
           const lineItem = session.line_items.data[0];
-          if (lineItem.price && lineItem.price.product && lineItem.price.product.metadata) {
+          if (lineItem.price && lineItem.price.product && typeof lineItem.price.product === 'object' && 'metadata' in lineItem.price.product) {
             const productMetadata = lineItem.price.product.metadata;
             userId = userId || productMetadata.userId;
             packageId = packageId || productMetadata.packageId;
@@ -142,70 +142,72 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Successfully added ${credits} credits to user ${userId}`);
 
       // Create invoice for the purchase
-      try {
-        const invoice = await stripe.invoices.create({
-          customer: session.customer || undefined,
-          collection_method: 'send_invoice',
-          days_until_due: 30,
-          metadata: {
-            userId: userId,
-            packageId: packageId,
-            credits: credits,
-            amount: amount,
-            sessionId: session.id,
-          },
-          line_items: [
-            {
-              price_data: {
-                currency: 'usd',
-                product_data: {
-                  name: packageInfo.name,
-                  description: packageInfo.description,
-                },
-                unit_amount: Math.round(parseFloat(amount) * 100), // Convert to cents
-              },
-              quantity: 1,
-            },
-          ],
-        });
-
-        // Send the invoice to the customer
-        await stripe.invoices.sendInvoice(invoice.id);
-        
-        // Store invoice information in database
+      if (session.customer) {
         try {
-          const { error: invoiceStoreError } = await supabase
-            .from('user_invoices')
-            .insert({
-              user_id: userId,
-              stripe_invoice_id: invoice.id,
-              package_id: packageId,
-              package_name: packageInfo.name,
-              credits: parseInt(credits),
-              amount: parseFloat(amount),
-              status: invoice.status,
-              invoice_url: invoice.hosted_invoice_url,
-              created_at: new Date().toISOString(),
-            });
+          const invoice = await stripe.invoices.create({
+            customer: session.customer,
+            collection_method: 'send_invoice',
+            days_until_due: 30,
+            metadata: {
+              userId: userId,
+              packageId: packageId,
+              credits: credits,
+              amount: amount,
+              sessionId: session.id,
+            },
+            line_items: [
+              {
+                price_data: {
+                  currency: 'usd',
+                  product_data: {
+                    name: packageInfo.name,
+                    description: packageInfo.description,
+                  },
+                  unit_amount: Math.round(parseFloat(amount || '0') * 100), // Convert to cents
+                },
+                quantity: 1,
+              },
+            ],
+          } as any);
 
-          if (invoiceStoreError) {
-            console.error('Error storing invoice in database:', invoiceStoreError);
-          } else {
-            console.log(`💾 Invoice stored in database for user ${userId}`);
+          // Send the invoice to the customer
+          await stripe.invoices.sendInvoice(invoice.id!);
+          
+          // Store invoice information in database
+          try {
+            const { error: invoiceStoreError } = await supabase
+              .from('user_invoices')
+              .insert({
+                user_id: userId,
+                stripe_invoice_id: invoice.id,
+                package_id: packageId,
+                package_name: packageInfo.name,
+                credits: parseInt(credits),
+                amount: parseFloat(amount || '0'),
+                status: invoice.status,
+                invoice_url: invoice.hosted_invoice_url,
+                created_at: new Date().toISOString(),
+              });
+
+            if (invoiceStoreError) {
+              console.error('Error storing invoice in database:', invoiceStoreError);
+            } else {
+              console.log(`💾 Invoice stored in database for user ${userId}`);
+            }
+          } catch (dbError) {
+            console.error('Error storing invoice in database:', dbError);
           }
-        } catch (dbError) {
-          console.error('Error storing invoice in database:', dbError);
+          
+          console.log(`📧 Invoice created and sent for user ${userId}:`, {
+            invoiceId: invoice.id,
+            amount: amount,
+            package: packageInfo.name
+          });
+        } catch (invoiceError) {
+          console.error('Error creating invoice:', invoiceError);
+          // Don't fail the webhook if invoice creation fails
+          // The credits were already added successfully
         }
-        
-        console.log(`📧 Invoice created and sent for user ${userId}:`, {
-          invoiceId: invoice.id,
-          amount: amount,
-          package: packageInfo.name
-        });
-      } catch (invoiceError) {
-        console.error('Error creating invoice:', invoiceError);
-        // Don't fail the webhook if invoice creation fails
-        // The credits were already added successfully
       }
 
       return NextResponse.json({ 

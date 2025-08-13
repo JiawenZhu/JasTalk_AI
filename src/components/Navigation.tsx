@@ -88,7 +88,7 @@ const Navigation: React.FC = () => {
     
     return displayName
       .split(' ')
-      .map(name => name.charAt(0).toUpperCase())
+      .map((name: string) => name.charAt(0).toUpperCase())
       .join('')
       .substring(0, 2);
   };
