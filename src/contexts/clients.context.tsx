@@ -3,7 +3,6 @@
 import React, { useState, useContext, ReactNode, useEffect } from "react";
 import { User } from "@/types/user";
 import { useAuth } from "@/contexts/auth.context";
-import { useOrganization } from "@/contexts/organization.context";
 import { ClientService } from "@/services/clients.service";
 
 interface ClientContextProps {
@@ -23,7 +22,6 @@ interface ClientProviderProps {
 export function ClientProvider({ children }: ClientProviderProps) {
   const [client, setClient] = useState<User>();
   const { user } = useAuth();
-  const { organization } = useOrganization();
 
   const [clientLoading, setClientLoading] = useState(true);
 
@@ -33,7 +31,7 @@ export function ClientProvider({ children }: ClientProviderProps) {
       const response = await ClientService.getClientById(
         user?.id as string,
         user?.email as string,
-        organization?.id as string,
+        "default-org-id", // Use default organization ID
       );
       setClient(response);
     } catch (error) {
@@ -46,8 +44,8 @@ export function ClientProvider({ children }: ClientProviderProps) {
     try {
       setClientLoading(true);
       const response = await ClientService.getOrganizationById(
-        organization?.id as string,
-        organization?.name as string,
+        "default-org-id", // Use default organization ID
+        "Jastalk AI", // Use default organization name
       );
     } catch (error) {
       console.error(error);
@@ -63,11 +61,10 @@ export function ClientProvider({ children }: ClientProviderProps) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (organization?.id) {
-      fetchOrganization();
-    }
+    // Always fetch organization since we have a default
+    fetchOrganization();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id]);
+  }, []);
 
   return (
     <ClientContext.Provider

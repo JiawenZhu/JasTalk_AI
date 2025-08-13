@@ -2,20 +2,92 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, Shield } from "lucide-react";
-import React from "react";
+import { Home, Users, Shield, CreditCard } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const items = [
   { href: "/dashboard", label: "Home", Icon: Home },
   { href: "/dashboard/interviewers", label: "Interviewers", Icon: Users },
   { href: "/admin", label: "Admin", Icon: Shield },
+  { href: "/premium", label: "Billing", Icon: CreditCard },
 ];
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isScrollingUp, setIsScrollingUp] = useState(false);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [subscription, setSubscription] = useState<any>(null);
+
+  // Scroll detection for transparency effects
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollingUp = currentScrollY < lastScrollY;
+      const scrollDelta = Math.abs(currentScrollY - lastScrollY);
+      
+      // Only update state if there's significant scroll movement
+      if (scrollDelta > 5) {
+        setIsScrollingUp(scrollingUp);
+        setLastScrollY(currentScrollY);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
+  // Fetch subscription data
+  useEffect(() => {
+    // Temporarily disable subscription fetching to prevent infinite loop
+    // Will re-enable once the database schema is properly set up
+  }, []);
 
   return (
-    <nav className="sm:hidden fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+    <nav className={`
+      sm:hidden fixed inset-x-0 bottom-0 z-50 transition-all duration-300 ease-in-out
+      ${isScrollingUp 
+        ? 'bg-white/80 backdrop-blur-md border-t border-gray-300' 
+        : 'bg-white/95 border-t border-gray-200'
+      }
+      supports-[backdrop-filter]:bg-white/60
+    `}
+    style={{
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 50,
+      display: 'block'
+    }}
+    >
+      {/* Scroll Direction Indicator */}
+      <div className={`
+        absolute top-0 left-1/2 transform -translate-x-1/2 w-16 h-1 rounded-full transition-all duration-300
+        ${isScrollingUp ? 'bg-indigo-400/60' : 'bg-gray-400/40'}
+      `} />
+      
+      {/* Credit Balance Indicator */}
+      {subscription && (
+        <div className="px-4 py-2 border-b border-gray-200 bg-gray-50/80">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center space-x-1">
+              <CreditCard className="w-3 h-3 text-blue-600" />
+              <span className="text-gray-600">Credits:</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <span className="font-semibold text-green-600">
+                ${subscription.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}
+              </span>
+              <span className="text-gray-500">
+                {subscription.interview_time_remaining || 0}m
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <ul className="flex items-center justify-around py-2">
         {items.map(({ href, label, Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname?.startsWith(href));
@@ -28,6 +100,7 @@ export default function MobileNav() {
             </li>
           );
         })}
+        
         {/* Small help icon docked into the mobile nav */}
         <li>
           <button

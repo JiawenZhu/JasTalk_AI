@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth.context';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,8 @@ export default function SignUpPage() {
   const [success, setSuccess] = useState('');
   const { signUp, signInWithOAuth, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showFreeCreditOffer = searchParams.get('offer') === 'free-credit';
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -88,7 +90,29 @@ export default function SignUpPage() {
         });
 
       if (result.success) {
-        setSuccess('Account created successfully! Please check your email to confirm your account.');
+        // Add $5 free credits to the new user's account
+        try {
+          const creditResponse = await fetch('/api/user-subscription', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action: 'add_welcome_credits',
+              amount: 5.00
+            }),
+          });
+          
+          if (creditResponse.ok) {
+            setSuccess('Account created successfully! You\'ve been given $5 in free credits. Please check your email to confirm your account.');
+          } else {
+            setSuccess('Account created successfully! Please check your email to confirm your account.');
+          }
+        } catch (creditError) {
+          console.error('Error adding welcome credits:', creditError);
+          setSuccess('Account created successfully! Please check your email to confirm your account.');
+        }
+        
         // Clear form
         setFormData({
           firstName: '',
@@ -144,6 +168,24 @@ export default function SignUpPage() {
               Join JasTalk AI to start conducting AI-powered interviews
             </CardDescription>
           </CardHeader>
+          
+          {/* Free Credit Offer Banner */}
+          {showFreeCreditOffer && (
+            <div className="px-6 pb-4">
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 text-center">
+                <div className="flex items-center justify-center space-x-2 mb-2">
+                  <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">$</span>
+                  </div>
+                  <span className="text-lg font-bold text-green-700">5 Free Credits</span>
+                </div>
+                <p className="text-sm text-green-700">
+                  Get $5 in free credits to start practicing interviews immediately after signup!
+                </p>
+              </div>
+            </div>
+          )}
+          
           <CardContent className="space-y-6">
             {/* OAuth Buttons */}
             <div className="space-y-3">

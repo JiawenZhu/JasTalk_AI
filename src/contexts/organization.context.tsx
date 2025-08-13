@@ -1,132 +1,63 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Organization } from '@/types/organization';
-import { useAuth } from '@/contexts/auth.context';
-import { createClient } from '@/lib/supabase';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { Organization } from "@/types/organization";
+import { useAuth } from "./auth.context";
 
 interface OrganizationContextType {
   organization: Organization | null;
   loading: boolean;
-  refetchOrganization: () => Promise<void>;
+  setOrganization: (org: Organization | null) => void;
+  refreshOrganization: () => Promise<void>;
 }
+
+// Default organization for all users
+const DEFAULT_ORGANIZATION: Organization = {
+  id: "default-org-id",
+  name: "Jastalk AI",
+  slug: "jastalk-ai",
+  description: "AI-powered interview practice platform",
+  logo_url: "/jastalk.png",
+  website_url: "https://jastalk.ai",
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  owner_id: "default-owner",
+  is_active: true,
+  subscription_tier: "free",
+  subscription_status: "active",
+  subscription_expires_at: null,
+  settings: {
+    allow_public_interviews: true,
+    require_approval: false,
+    max_interviews_per_month: 10,
+    max_team_members: 5
+  }
+};
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(DEFAULT_ORGANIZATION);
+  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const supabase = createClient();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const fetchUserOrganization = async () => {
-    if (!user?.id) {
-      setOrganization(null);
-      setLoading(false);
-      
-return;
-    }
-
-    // For development, use the same organization ID that the interviews are using
-    if (process.env.NODE_ENV === 'development' && user.id === 'test-user-123') {
-      const defaultOrg: Organization = {
-        id: 'test-org-123',
-        name: 'Test Organization',
-        user_id: user.id,
-        image_url: '',
-        plan: 'free'
-      };
-      setOrganization(defaultOrg);
-      setLoading(false);
-      
-return;
-    }
-
-    try {
-      // First, get the user to find their organization_id
-      const { data: userData, error: userError } = await supabase
-        .from('user')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (userError || !userData?.organization_id) {
-        // For development, create a default organization if none exists
-        const defaultOrg: Organization = {
-          id: 'dev-org-123',
-          name: 'Development Organization',
-          user_id: user.id,
-          image_url: '',
-          plan: 'free'
-        };
-        setOrganization(defaultOrg);
-        setLoading(false);
-        
-return;
-      }
-
-      // Now get the organization using the organization_id
-      const { data: orgData, error: orgError } = await supabase
-        .from('organization')
-        .select('*')
-        .eq('id', userData.organization_id)
-        .single();
-
-      if (orgError) {
-        console.error('Error fetching organization:', orgError);
-        // For development, create a default organization if none exists
-        const defaultOrg: Organization = {
-          id: 'dev-org-123',
-          name: 'Development Organization',
-          user_id: user.id,
-          image_url: '',
-          plan: 'free'
-        };
-        setOrganization(defaultOrg);
-      } else {
-        setOrganization(orgData);
-      }
-    } catch (error) {
-      console.error('Error fetching organization:', error);
-      setOrganization(null);
-    } finally {
-      setLoading(false);
-    }
+  const refreshOrganization = async () => {
+    // For now, just return the default organization
+    // In the future, this could fetch from an API if needed
+    setOrganization(DEFAULT_ORGANIZATION);
   };
 
   useEffect(() => {
-    if (!mounted) {return;}
+    // Always set the default organization
+    setOrganization(DEFAULT_ORGANIZATION);
+    setLoading(false);
+  }, []);
 
-    if (user) {
-      fetchUserOrganization();
-    } else {
-      setOrganization(null);
-      setLoading(false);
-    }
-  }, [user, mounted]);
-
-  // Don't render until mounted to prevent hydration mismatch
-  if (!mounted) {
-    return (
-      <OrganizationContext.Provider value={{
-        organization: null,
-        loading: true,
-        refetchOrganization: async () => {}
-      }}>
-        {children}
-      </OrganizationContext.Provider>
-    );
-  }
-
-  const value = {
+  const value: OrganizationContextType = {
     organization,
     loading,
-    refetchOrganization: fetchUserOrganization,
+    setOrganization,
+    refreshOrganization,
   };
 
   return (
@@ -139,8 +70,14 @@ return;
 export function useOrganization() {
   const context = useContext(OrganizationContext);
   if (context === undefined) {
-    throw new Error('useOrganization must be used within an OrganizationProvider');
+    // Return default values instead of throwing an error
+    return {
+      organization: DEFAULT_ORGANIZATION,
+      loading: false,
+      setOrganization: () => {},
+      refreshOrganization: async () => {},
+    };
   }
   
-return context;
+  return context;
 } 

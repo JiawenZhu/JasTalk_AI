@@ -11,4 +11,15 @@ export interface Interviewer {
   description: string;
   audio: string;
   agent_id: string;
+  // New fields for Gemini integration
+  agent_type: 'retell' | 'gemini';
+  gemini_config?: {
+    model: string;
+    voice: string;
+    personality: string;
+    interview_style: string;
+  };
+  subscription_required: 'free' | 'pro';
+  is_active: boolean;
+  sync_status?: string;
 }

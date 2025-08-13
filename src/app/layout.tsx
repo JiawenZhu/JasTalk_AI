@@ -2,7 +2,7 @@ import React from "react";
 import "./globals.css";
 import { Metadata, Viewport } from "next";
 import { Inter } from 'next/font/google';
-import Providers from '@/components/providers';
+import { Providers } from '@/components/providers';
 import Pixels from '@/components/analytics/Pixels';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
@@ -59,11 +59,11 @@ export default function RootLayout({
           tiktokPixelId={process.env.TIKTOK_PIXEL_ID}
         />
         <Providers>
-          <main className="min-h-screen bg-[#F7F9FC] pb-14 sm:pb-0">
+          <main className="min-h-screen bg-[#F7F9FC] pb-20 sm:pb-0">
             {children}
           </main>
-          {/* Mobile bottom nav (hidden on desktop) */}
-          <div className="sm:hidden">
+          {/* Mobile bottom nav (hidden on desktop) - ALWAYS VISIBLE */}
+          <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50">
             <MobileNav />
           </div>
         </Providers>

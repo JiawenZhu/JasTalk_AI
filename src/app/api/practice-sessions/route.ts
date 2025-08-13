@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
+    // Get cookies from the request to properly authenticate the user
+    const cookieStore = await cookies();
     const supabase = createServerClient();
     
-    // Get current user
+    // Get current user with proper authentication context
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
+      console.error('❌ User authentication failed:', userError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's practice sessions
+    console.log('🔍 Fetching practice sessions for user:', {
+      userId: user.id,
+      userEmail: user.email,
+      timestamp: new Date().toISOString()
+    });
+
+    // Get user's practice sessions with proper RLS enforcement
     const { data: sessions, error } = await supabase
       .from('practice_sessions')
       .select('*')
@@ -19,8 +29,17 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching practice sessions:', error);
+      console.error('❌ Error fetching practice sessions:', error);
       return NextResponse.json({ error: 'Failed to fetch practice sessions' }, { status: 500 });
+    }
+
+    console.log(`📊 Found ${sessions?.length || 0} sessions for user ${user.id}`);
+
+    // Additional security check: verify all sessions belong to the current user
+    const userSessions = sessions?.filter(session => session.user_id === user.id) || [];
+    if (userSessions.length !== (sessions?.length || 0)) {
+      console.warn('⚠️ Security warning: Some sessions do not belong to the current user');
+      console.warn('⚠️ Filtered sessions:', userSessions.length, 'vs total:', sessions?.length);
     }
 
     // Group by interviewer + normalized questions signature; choose latest (timestamped name if tie)
@@ -33,7 +52,7 @@ export async function GET(request: NextRequest) {
     };
 
     const latestBySignature = new Map<string, any>();
-    for (const s of sessions || []) {
+    for (const s of userSessions) {
       const sig = signatureOf(s);
       const existing = latestBySignature.get(sig);
       if (!existing) {
@@ -54,9 +73,36 @@ export async function GET(request: NextRequest) {
     }
 
     const uniqueSessions = Array.from(latestBySignature.values());
-    return NextResponse.json({ sessions: uniqueSessions });
+    console.log(`✅ Returning ${uniqueSessions.length} unique sessions for user ${user.id}`);
+    
+    // Transform the data to match the frontend expectations
+    const transformedSessions = uniqueSessions.map(session => {
+      console.log('🔍 Debug session data:', {
+        id: session.id,
+        session_name: session.session_name,
+        agent_name: session.agent_name,
+        total_questions: session.total_questions,
+        questions: session.questions,
+        questions_length: session.questions?.length,
+        questions_type: typeof session.questions,
+        questions_is_array: Array.isArray(session.questions)
+      });
+      
+      return {
+        id: session.id,
+        title: session.session_name || 'Untitled Session',
+        type: session.agent_name || 'AI Interview',
+        score: session.score || 0,
+        date: session.created_at || new Date().toISOString(),
+        endedAt: session.end_time || null,
+        questionCount: session.total_questions || 0,
+        status: session.status || 'in-progress'
+      };
+    });
+    
+    return NextResponse.json({ sessions: transformedSessions });
   } catch (error) {
-    console.error('Error in GET /api/practice-sessions:', error);
+    console.error('❌ Error in GET /api/practice-sessions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -86,6 +132,16 @@ export async function POST(request: NextRequest) {
     if (!session_name) {
       return NextResponse.json({ error: 'Session name is required' }, { status: 400 });
     }
+
+    console.log('🔍 Debug POST request data:', {
+      session_name,
+      agent_id,
+      agent_name,
+      questions,
+      questions_length: questions?.length,
+      questions_type: typeof questions,
+      questions_is_array: Array.isArray(questions)
+    });
 
     // Create practice session
     const { data: session, error: sessionError } = await supabase
@@ -146,6 +202,12 @@ export async function PUT(request: NextRequest) {
     }
     if (questions) {
       updateData.questions = questions;
+      updateData.total_questions = questions.length; // Update question count when questions change
+      console.log('🔍 Debug PUT update data:', {
+        questions,
+        questions_length: questions.length,
+        total_questions: updateData.total_questions
+      });
     }
 
     console.log('Updating practice session:', { sessionId, updateData, userId: user.id });

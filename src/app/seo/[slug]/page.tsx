@@ -46,7 +46,7 @@ export default function SeoPage({ params }: Params) {
       <p className="lead">{entry.description}</p>
       <p>{entry.body}</p>
       <div className="mt-8">
-        <a href="/practice/new" className="inline-block rounded-lg bg-blue-600 text-white px-4 py-2 font-semibold">Start Free Practice</a>
+        <a href="/sign-up?offer=free-credit" className="inline-block rounded-lg bg-blue-600 text-white px-4 py-2 font-semibold">Start Free Practice</a>
       </div>
     </article>
   )

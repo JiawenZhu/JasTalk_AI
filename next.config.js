@@ -63,84 +63,47 @@ const nextConfig = {
     ];
   },
 
-  // Experimental features for performance (removed deprecated options)
+  // Experimental features for performance
   experimental: {
     optimizeCss: true,
     scrollRestoration: true,
+    // Optimize package imports
+    optimizePackageImports: ['lucide-react', '@heroicons/react', 'framer-motion'],
   },
 
-  // Webpack optimizations
-  webpack: (webpackConfig, { dev, isServer, webpack }) => {
-    // Performance optimizations
+  // Simple webpack configuration
+  webpack: (config, { dev, isServer, webpack }) => {
+    // Basic optimizations
     if (!dev && !isServer) {
-      // Code splitting optimizations
-      webpackConfig.optimization = {
-        ...webpackConfig.optimization,
+      // Production optimizations
+      config.optimization = {
+        ...config.optimization,
         splitChunks: {
           chunks: 'all',
           cacheGroups: {
-            default: false,
-            vendors: false,
-            // Vendor chunk
             vendor: {
               name: 'vendors',
               chunks: 'all',
               test: /node_modules/,
               priority: 20,
             },
-            // Common chunk
-            common: {
-              name: 'commons',
-              minChunks: 2,
-              chunks: 'all',
-              priority: 10,
-              reuseExistingChunk: true,
-              enforce: true,
-            },
-            // Framer Motion chunk (since it's used heavily)
-            framerMotion: {
-              name: 'framer-motion',
-              chunks: 'all',
-              test: /[\\/]node_modules[\\/](framer-motion)[\\/]/,
-              priority: 30,
-            },
-            // UI components chunk
-            ui: {
-              name: 'ui',
-              chunks: 'all',
-              test: /[\\/]src[\\/]components[\\/]ui[\\/]/,
-              priority: 25,
-            },
           },
         },
       };
-
-      // Bundle analyzer (only in development)
-      if (process.env.ANALYZE === 'true') {
-        const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
-        webpackConfig.plugins.push(
-          new BundleAnalyzerPlugin({
-            analyzerMode: 'static',
-            openAnalyzer: false,
-          })
-        );
-      }
     }
 
-    // Remove node: from import specifiers
-    webpackConfig.plugins.push(
-      new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
-        resource.request = resource.request.replace(/^node:/, "");
-      }),
-    );
-
-    // Optimize imports
-    webpackConfig.resolve.alias = {
-      ...webpackConfig.resolve.alias,
-      // Add aliases for commonly used paths
+    // Cache optimization
+    config.cache = {
+      type: 'filesystem',
+      buildDependencies: {
+        config: [__filename],
+      },
+      cacheDirectory: require('path').resolve(__dirname, '.next/cache'),
+      compression: 'gzip',
+      maxAge: 172800000, // 2 days
     };
 
-    return webpackConfig;
+    return config;
   },
 
   // Environment variables
@@ -150,15 +113,11 @@ const nextConfig = {
 
   // TypeScript configuration
   typescript: {
-    // Ignore TypeScript errors during build for faster builds
-    // Only enable this if you're confident in your TypeScript setup
     ignoreBuildErrors: false,
   },
 
   // ESLint configuration
   eslint: {
-    // Ignore ESLint errors during build for faster builds
-    // Only enable this if you're confident in your ESLint setup
     ignoreDuringBuilds: true,
   },
 

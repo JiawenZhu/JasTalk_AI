@@ -311,6 +311,40 @@ class AuthService {
     }
   }
 
+  // Refresh the current session
+  async refreshSession(): Promise<AuthResponse> {
+    try {
+      const { data: { session }, error } = await this.supabase.auth.refreshSession()
+      
+      if (error) {
+        return {
+          success: false,
+          error: this.getErrorMessage(error)
+        }
+      }
+
+      if (!session) {
+        return {
+          success: false,
+          error: 'No session to refresh'
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          session: session,
+          user: session.user
+        }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'An unexpected error occurred during session refresh'
+      }
+    }
+  }
+
   // Get user's full name
   getUserFullName(user: User | null): string {
     if (!user) return ''

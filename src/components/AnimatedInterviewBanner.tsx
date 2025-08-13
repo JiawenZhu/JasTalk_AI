@@ -275,14 +275,14 @@ const AnimatedInterviewBanner = () => {
         <motion.button
           className="w-full max-w-sm mx-auto bg-white text-blue-600 font-semibold py-3 px-6 rounded-xl shadow-lg mb-4 md:mb-6 hover:bg-blue-50 transition-colors duration-200"
           whileTap={{ scale: 0.95 }}
-          onClick={() => router.push('/sign-up')}
+          onClick={() => router.push('/sign-up?offer=free-credit')}
         >
-          Start Interview Practice
+          Start Free Practice
         </motion.button>
         
         {/* Subheading - Now below the characters */}
         <p className="text-blue-100 mb-6 md:mb-8 text-sm md:text-base lg:text-lg max-w-2xl mx-auto">
-          Sign up and purchase credits to start practicing today
+          Sign up and get $5 in free credits to start practicing today
         </p>
       </div>
     </div>

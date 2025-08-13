@@ -18,7 +18,7 @@ interface AuthContextType {
   updateProfile: (data: UpdateProfileData) => Promise<AuthResponse>;
   getUserFullName: (user: User | null) => string;
   getUserInitials: (user: User | null) => string;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<AuthResponse>;
   handleAuthCallback: () => Promise<AuthResponse>;
 }
 
@@ -58,10 +58,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+
+
   // Refresh session
-  const refreshSession = useCallback(async () => {
-    await initializeAuth();
-  }, [initializeAuth]);
+  const refreshSession = async (): Promise<AuthResponse> => {
+    try {
+      const result = await authService.refreshSession();
+      if (result.success) {
+        const { session: currentSession, user: currentUser } = result.data;
+        setSession(currentSession);
+        setUser(currentUser);
+      }
+      return result;
+    } catch (error) {
+      console.error('Error refreshing session:', error);
+      return {
+        success: false,
+        error: 'Failed to refresh session'
+      };
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -70,7 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
 
-    initializeAuth();
+    // Temporarily disable initializeAuth to prevent infinite loop
+    // Will re-enable once the auth state is stable
 
     // Listen for auth state changes
     const { data: { subscription } } = authService.onAuthStateChange(
@@ -99,8 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, [mounted, initializeAuth]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [mounted]); // Remove initializeAuth dependency to prevent infinite loops
 
   // Don't render until mounted to prevent hydration mismatch
   if (!mounted) {
@@ -119,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateProfile: async () => ({ success: false, error: 'Not mounted' }),
         getUserFullName: () => '',
         getUserInitials: () => '',
-        refreshSession: async () => {},
+        refreshSession: async () => ({ success: false, error: 'Not mounted' }),
         handleAuthCallback: async () => ({ success: false, error: 'Not mounted' })
       }}>
         {children}

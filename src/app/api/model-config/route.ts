@@ -38,7 +38,7 @@ export async function GET() {
     // Get model configuration from environment or database
     const defaultConfig: ModelConfig = {
       provider: 'openai',
-      model: 'gpt-5-nano',
+      model: 'gpt-4o-mini',
       apiKey: process.env.OPENAI_API_KEY || '',
       isEnabled: true,
       features: {

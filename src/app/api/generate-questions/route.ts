@@ -3,10 +3,12 @@ import { createServerClient } from '@/lib/supabase-server';
 
 interface GenerateQuestionsRequest {
   jobDescription: string;
-  questionCount: number;
-  interviewType: string;
-  difficulty: string;
-  focusAreas: string[];
+  numberOfQuestions?: number;
+  questionCount?: number;
+  questionType?: string;
+  interviewType?: string;
+  difficulty?: string;
+  focusAreas?: string[];
 }
 
 interface Question {
@@ -32,31 +34,49 @@ interface ModelConfig {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    console.log('=== Generate Questions API Called ===');
     
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Auth is optional for generation. If available, we may fetch per-user config; otherwise use defaults
+    let user: { id: string } | null = null;
+    try {
+      const supabase = createServerClient();
+      const { data: { user: u } } = await supabase.auth.getUser();
+      user = u ?? null;
+      console.log('User auth result:', user ? `User ID: ${user.id}` : 'No user authenticated');
+    } catch (error) {
+      console.log('Supabase auth error (this is normal for unauthenticated requests):', error);
     }
 
     const body: GenerateQuestionsRequest = await request.json();
-    const { jobDescription, questionCount, interviewType, difficulty, focusAreas } = body;
+    const { jobDescription, numberOfQuestions, questionCount, questionType, interviewType, difficulty, focusAreas } = body;
 
     if (!jobDescription.trim()) {
       return NextResponse.json({ error: 'Job description is required' }, { status: 400 });
     }
 
-    if (questionCount < 5 || questionCount > 20) {
-      return NextResponse.json({ error: 'Question count must be between 5 and 20' }, { status: 400 });
+    // Use numberOfQuestions if provided, otherwise fall back to questionCount
+    const finalQuestionCount = numberOfQuestions || questionCount || 5;
+    
+    // Allow 3 questions for free practice, 5-20 for regular practice
+    if (finalQuestionCount < 3 || finalQuestionCount > 20) {
+      return NextResponse.json({ error: 'Question count must be between 3 and 20' }, { status: 400 });
     }
 
     // Get model configuration
-    const modelConfig = await getModelConfig(supabase, user.id);
+    const modelConfig = await getModelConfig(user?.id);
+    
+    console.log('Model config received:', {
+      provider: modelConfig.provider,
+      model: modelConfig.model,
+      isEnabled: modelConfig.isEnabled,
+      hasApiKey: !!modelConfig.apiKey
+    });
     
     if (!modelConfig.isEnabled) {
+      console.log('Model is disabled, using mock questions');
       // Return enhanced mock questions if no model is enabled
-      const mockQuestions: Question[] = generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
+      const mockQuestions: Question[] = generateEnhancedMockQuestions(jobDescription, finalQuestionCount, interviewType || 'behavioral', difficulty || 'medium', focusAreas || []);
+      
       return NextResponse.json({ questions: mockQuestions });
     }
 
@@ -64,39 +84,58 @@ export async function POST(request: NextRequest) {
     let questions: Question[];
     
     if (modelConfig.provider === 'gemini') {
-      questions = await generateQuestionsWithGemini(jobDescription, questionCount, interviewType, difficulty, focusAreas, modelConfig);
+      console.log('Using Gemini provider');
+      questions = await generateQuestionsWithGemini(jobDescription, finalQuestionCount, interviewType || 'behavioral', difficulty || 'medium', focusAreas || [], modelConfig);
     } else {
-      questions = await generateQuestionsWithOpenAI(jobDescription, questionCount, interviewType, difficulty, focusAreas, modelConfig);
+      console.log('Using OpenAI provider with model:', modelConfig.model);
+      questions = await generateQuestionsWithOpenAI(jobDescription, finalQuestionCount, interviewType || 'behavioral', difficulty || 'medium', focusAreas || [], modelConfig);
     }
     
     return NextResponse.json({ questions });
   } catch (error) {
     console.error('Error generating questions:', error);
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-async function getModelConfig(supabase: any, userId: string): Promise<ModelConfig> {
+async function getModelConfig(userId?: string | null): Promise<ModelConfig> {
   try {
-    // Try to get from database
-    const { data: configData } = await supabase
-      .from('model_configurations')
-      .select('config')
-      .eq('user_id', userId)
-      .single();
+    // Try to get from database if user is available
+    if (userId) {
+      const supabase = createServerClient();
+      const { data: configData } = await supabase
+        .from('model_configurations')
+        .select('config')
+        .eq('user_id', userId)
+        .single();
 
-    if (configData?.config) {
-      return configData.config;
+      if (configData?.config) {
+        return configData.config;
+      }
     }
   } catch (error) {
     console.log('No saved configuration found');
   }
 
+  // Debug logging
+  console.log('Environment check:');
+  console.log('- OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);
+  console.log('- OPENAI_API_KEY length:', process.env.OPENAI_API_KEY?.length || 0);
+  console.log('- NODE_ENV:', process.env.NODE_ENV);
+
+  // Force use the environment variable directly
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error('OPENAI_API_KEY not found in environment');
+    throw new Error('OPENAI_API_KEY not configured');
+  }
+
   // Return default configuration
-  return {
-    provider: 'openai',
-    model: 'gpt-5-nano',
-    apiKey: process.env.OPENAI_API_KEY || '',
+  const defaultConfig = {
+    provider: 'openai' as const,
+    model: 'gpt-4o-mini', // Default to gpt-4o-mini
+    apiKey: apiKey, // Use the verified API key
     isEnabled: true,
     features: {
       liveStreaming: false,
@@ -105,6 +144,13 @@ async function getModelConfig(supabase: any, userId: string): Promise<ModelConfi
       longContext: false
     }
   };
+
+  console.log('Default config:', {
+    ...defaultConfig,
+    apiKey: defaultConfig.apiKey ? `${defaultConfig.apiKey.substring(0, 10)}...` : 'NOT_SET'
+  });
+
+  return defaultConfig;
 }
 
 async function generateQuestionsWithGemini(
@@ -119,7 +165,8 @@ async function generateQuestionsWithGemini(
   
   if (!geminiApiKey) {
     console.error('No Gemini API key available');
-    return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
+    
+return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
   }
 
   const prompt = `You are an expert interview question generator for AI-powered interview practice. Generate ${questionCount} high-quality, job-specific interview questions based on the following job description.
@@ -228,7 +275,14 @@ Make sure the questions are highly relevant to the specific job description prov
   } catch (error) {
     console.error('Gemini API error:', error);
     // Fallback to enhanced mock questions
-    return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
+
+    return generateEnhancedMockQuestions(
+      jobDescription,
+      questionCount,
+      interviewType,
+      difficulty,
+      focusAreas
+    );
   }
 }
 
@@ -240,12 +294,29 @@ async function generateQuestionsWithOpenAI(
   focusAreas: string[],
   modelConfig: ModelConfig
 ): Promise<Question[]> {
+  console.log('generateQuestionsWithOpenAI called with config:', {
+    provider: modelConfig.provider,
+    model: modelConfig.model,
+    hasApiKey: !!modelConfig.apiKey,
+    apiKeyLength: modelConfig.apiKey?.length || 0
+  });
+
   const openaiApiKey = modelConfig.apiKey || process.env.OPENAI_API_KEY;
+  
+  console.log('Final API key check:', {
+    fromConfig: !!modelConfig.apiKey,
+    fromEnv: !!process.env.OPENAI_API_KEY,
+    finalKeyExists: !!openaiApiKey,
+    finalKeyLength: openaiApiKey?.length || 0
+  });
   
   if (!openaiApiKey) {
     console.error('No OpenAI API key available');
+    
     return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
   }
+
+  console.log('Proceeding with OpenAI API call...');
 
   const prompt = `You are an expert interview question generator for AI-powered interview practice. Generate ${questionCount} high-quality, job-specific interview questions based on the following job description.
 
@@ -290,88 +361,92 @@ Return the response as a JSON array with this structure:
 
 Make sure the questions are highly relevant to the specific job description provided, not generic questions.`;
 
-  try {
-    // Simple retry with exponential backoff for rate limits
-    const maxAttempts = 3;
-    let attempt = 0;
-    let response: Response | null = null;
+  // Define fallback models in order of preference
+  const fallbackModels = [
+    'gpt-4o-mini',
+    'gpt-4-mini'
+  ];
 
-    while (attempt < maxAttempts) {
-      attempt += 1;
-      response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Try each model until one works
+  for (const modelId of fallbackModels) {
+    try {
+      console.log(`Attempting to use model: ${modelId}`);
+      
+      // Check if this is a GPT-5 model (uses different parameters)
+      const isGpt5Model = modelId.startsWith('gpt-5');
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: modelConfig.model,
+          model: modelId,
           messages: [
             {
               role: 'system',
-              content: 'You are an expert interview question generator. Generate high-quality, job-specific interview questions based on job descriptions. Always return valid JSON arrays.'
+              content: 'You are an expert interview question generator. Generate high-quality, job-specific interview questions based on job descriptions. Always return valid JSON arrays.',
             },
-            {
-              role: 'user',
-              content: prompt
-            }
+            { role: 'user', content: prompt },
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
+          // Use correct parameter based on model type and omit temperature for GPT-5
+          ...(isGpt5Model ? { max_completion_tokens: 2000 } : { max_tokens: 2000, temperature: 0.7 }),
         }),
       });
 
-      // If success or not a rate limit, break
-      if (response.ok || response.status !== 429) {
-        break;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`Model ${modelId} failed: ${response.status} - ${errorText}`);
+        continue; // Try next model
       }
 
-      // Rate limited: wait and retry
-      const backoffMs = 500 * Math.pow(2, attempt - 1);
-      await new Promise((r) => setTimeout(r, backoffMs));
-    }
-
-    if (!response || !response.ok) {
-      throw new Error(`OpenAI API error: ${response ? response.status : 'no-response'}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-    
-    if (!content) {
-      throw new Error('No content received from OpenAI');
-    }
-
-    // Parse the JSON response
-    let questions: any[];
-    try {
-      // Extract JSON from the response (in case there's extra text)
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        questions = JSON.parse(jsonMatch[0]);
-      } else {
-        questions = JSON.parse(content);
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+      
+      if (!content) {
+        console.log(`Model ${modelId} returned no content`);
+        continue; // Try next model
       }
-    } catch (parseError) {
-      console.error('Error parsing OpenAI response:', parseError);
-      throw new Error('Failed to parse OpenAI response');
+
+      console.log(`Successfully used model: ${modelId}`);
+
+      // Parse the JSON response
+      let questions: any[];
+      try {
+        // Extract JSON from the response (in case there's extra text)
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          questions = JSON.parse(jsonMatch[0]);
+        } else {
+          questions = JSON.parse(content);
+        }
+      } catch (parseError) {
+        console.error('Error parsing OpenAI response:', parseError);
+        continue; // Try next model
+      }
+
+      // Validate and format questions
+      const formattedQuestions: Question[] = questions.map((q, index) => ({
+        id: `question_${Date.now()}_${index}`,
+        text: q.text || 'Question text not provided',
+        type: q.type || 'technical',
+        difficulty: q.difficulty || 'medium',
+        category: q.category || 'General'
+      }));
+
+      return formattedQuestions;
+
+    } catch (error) {
+      console.log(`Model ${modelId} encountered error:`, error);
+      continue; // Try next model
     }
-
-    // Validate and format questions
-    const formattedQuestions: Question[] = questions.map((q, index) => ({
-      id: `question_${Date.now()}_${index}`,
-      text: q.text || 'Question text not provided',
-      type: q.type || 'technical',
-      difficulty: q.difficulty || 'medium',
-      category: q.category || 'General'
-    }));
-
-    return formattedQuestions;
-  } catch (error) {
-    console.error('OpenAI API error:', error);
-    // Fallback to enhanced mock questions
-    return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
   }
+
+  // If all models failed, fall back to mock questions
+  console.log('All OpenAI models failed, falling back to mock questions');
+  
+  return generateEnhancedMockQuestions(jobDescription, questionCount, interviewType, difficulty, focusAreas);
 }
 
 function generateEnhancedMockQuestions(
@@ -616,7 +691,8 @@ function generateDynamicQuestions(jobAnalysis: any, questionCount: number, inter
     if (difficulty !== 'mixed' && q.difficulty !== difficulty) {
       return false;
     }
-    return true;
+    
+return true;
   });
   
   // If not enough questions after filtering, add more generic ones
@@ -649,5 +725,6 @@ function generateDynamicQuestions(jobAnalysis: any, questionCount: number, inter
   
   // Shuffle and take the requested number of questions
   const shuffled = filteredQuestions.sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, questionCount);
+  
+return shuffled.slice(0, questionCount);
 } 

@@ -4,12 +4,11 @@ import "../globals.css";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import Navbar from "@/components/navbar";
-import Providers from "@/components/providers";
+import { Providers } from "@/components/providers";
 import { Toaster } from "sonner";
 import SideMenu from "@/components/sideMenu";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
-import { useOrganization } from "@/contexts/organization.context";
 import { useEffect, useState } from "react";
 import HelpButton from "@/components/ui/help-button";
 import WelcomeModal from "@/components/onboarding/welcome-modal";
@@ -20,18 +19,16 @@ const inter = Inter({ subsets: ["latin"] });
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { loading: authLoading } = useAuth();
-  const { loading: orgLoading } = useOrganization();
   const [layoutReady, setLayoutReady] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const { 
     isFirstTime, 
     showOnboarding, 
-    completeOnboarding, 
     hideOnboardingModal 
   } = useOnboarding();
 
   const isAuthPage = pathname.includes("/sign-in") || pathname.includes("/sign-up");
-  const isLoading = !isAuthPage && (authLoading || orgLoading);
+  const isLoading = !isAuthPage && authLoading;
 
   useEffect(() => {
     if (!isLoading) {
@@ -60,44 +57,33 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="navigation-layer min-h-screen bg-[#F7F9FC]">
-      {!isAuthPage && <Navbar />}
+      <Navbar />
       <div className="flex flex-row h-screen">
-        {!isAuthPage && (
-          <div className="hidden sm:block">
-            <SideMenu />
-          </div>
-        )}
+        <div className="hidden sm:block">
+          <SideMenu />
+        </div>
         
-        {/* Content area with smooth transitions */}
-        <div className={cn(
-          "pt-[64px] h-full overflow-y-auto flex-grow transition-opacity duration-200",
-          !isAuthPage ? "sm:ml-[200px] navigation-offset" : "",
-          contentVisible ? "opacity-100" : "opacity-0"
-        )}>
+        {/* Content area - simplified without problematic transitions */}
+        <div className="pt-[64px] h-full overflow-y-auto flex-grow sm:ml-[200px] navigation-offset">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
             </div>
           ) : (
-            <div className={cn(
-              "transition-all duration-200 ease-in-out",
-              contentVisible ? "transform translate-y-0" : "transform translate-y-2"
-            )}>
+            <div>
               {children}
             </div>
           )}
         </div>
       </div>
       
-      {/* Help Button - only show for authenticated users */}
-      {!isAuthPage && (
-        <HelpButton 
-          variant="floating" 
-          position="bottom-right" 
-          size="sm"
-          className="hidden sm:flex" 
-        />
-      )}
+      {/* Help Button - show for all users */}
+      <HelpButton 
+        variant="floating" 
+        position="bottom-right" 
+        size="sm"
+        className="hidden sm:flex" 
+      />
 
       {/* Onboarding Modal */}
       <WelcomeModal
@@ -106,18 +92,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         onClose={hideOnboardingModal}
       />
       
-      <Toaster
-        toastOptions={{
-          classNames: {
-            toast: "bg-white",
-            title: "text-black",
-            description: "text-red-400",
-            actionButton: "bg-indigo-400",
-            cancelButton: "bg-orange-400",
-            closeButton: "bg-white-400",
-          },
-        }}
-      />
+      {/* Toast notifications */}
+      <Toaster />
     </div>
   );
 }

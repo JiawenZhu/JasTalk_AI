@@ -27,7 +27,7 @@ interface ModelConfig {
 
 const AVAILABLE_MODELS = {
   openai: [
-    { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Latest nano model - fast and efficient' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective (default)' },
     { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective' },
     { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable model' },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Balanced performance' }
@@ -43,7 +43,7 @@ const AVAILABLE_MODELS = {
 export default function ModelSelection() {
   const [config, setConfig] = useState<ModelConfig>({
     provider: 'openai',
-    model: 'gpt-5-nano',
+    model: 'gpt-4o-mini',
     apiKey: '',
     isEnabled: true,
     features: {
