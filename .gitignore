@@ -53,3 +53,6 @@ package-lock.json
 
 # Local env backups
 .env.local.backup
+
+.env.vercel
+.vercel/.env.preview.local
