@@ -72,9 +72,9 @@ export default function TestPaymentPage() {
   };
 
   const testPackages = [
-    { id: 'starter', name: 'Starter Package', credits: 100, price: 12.00 },
-    { id: 'pro', name: 'Pro Package', credits: 167, price: 20.00 },
-    { id: 'advanced', name: 'Advanced Package', credits: 200, price: 24.00 },
+    { id: 'starter', name: 'Starter Package', description: '100 minutes of interview practice', credits: 100, price: 12.00 },
+    { id: 'pro', name: 'Pro Package', description: '167 minutes of interview practice', credits: 167, price: 20.00 },
+    { id: 'advanced', name: 'Advanced Package', description: '200 minutes of interview practice', credits: 200, price: 24.00 },
   ];
 
   return (
