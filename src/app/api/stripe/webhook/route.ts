@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature');
 
   if (!signature) {
+    console.error('Webhook: Missing signature');
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
@@ -15,20 +16,25 @@ export async function POST(request: NextRequest) {
 
   try {
     event = stripe.webhooks.constructEvent(body, signature, getWebhookSecret());
+    console.log('Webhook: Event received:', event.type);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err);
+    console.error('Webhook: Signature verification failed:', err);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    console.log('Webhook: Processing checkout.session.completed for session:', session.id);
     
     try {
-      // Use admin client in webhooks (no end-user session, needs RLS bypass)
+      // Use admin client with service role key to bypass RLS
       const supabase = createAdminClient();
       
       // Extract metadata from session and line items
       let userId, packageId, credits, amount, stripeMode;
+      
+      console.log('Webhook: Session metadata:', session.metadata);
+      console.log('Webhook: Session line_items:', session.line_items);
       
       // Try to get metadata from session first
       if (session.metadata) {
@@ -37,24 +43,37 @@ export async function POST(request: NextRequest) {
         credits = session.metadata.credits;
         amount = session.metadata.amount;
         stripeMode = session.metadata.stripeMode;
+        
+        console.log('Webhook: Extracted from session metadata:', {
+          userId, packageId, credits, amount, stripeMode
+        });
       }
       
       // If not found in session metadata, try to get from line items
       if (!userId || !packageId || !credits) {
+        console.log('Webhook: Trying to extract from line items...');
         if (session.line_items && session.line_items.data && session.line_items.data.length > 0) {
           const lineItem = session.line_items.data[0];
+          console.log('Webhook: Line item:', lineItem);
+          
           if (lineItem.price && lineItem.price.product && typeof lineItem.price.product === 'object' && 'metadata' in lineItem.price.product) {
             const productMetadata = lineItem.price.product.metadata;
+            console.log('Webhook: Product metadata:', productMetadata);
+            
             userId = userId || productMetadata.userId;
             packageId = packageId || productMetadata.packageId;
             credits = credits || productMetadata.credits;
+            
+            console.log('Webhook: Extracted from product metadata:', {
+              userId, packageId, credits
+            });
           }
         }
       }
       
       // If still no metadata, try to get from the session object directly
       if (!userId || !packageId || !credits) {
-        console.error('Missing metadata in session:', {
+        console.error('Webhook: Missing metadata in session:', {
           sessionMetadata: session.metadata,
           lineItems: session.line_items,
           session: session
@@ -65,15 +84,16 @@ export async function POST(request: NextRequest) {
       // Find the package
       const packageInfo = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
       if (!packageInfo) {
-        console.error('Invalid package ID:', packageId);
+        console.error('Webhook: Invalid package ID:', packageId);
         return NextResponse.json({ error: 'Invalid package' }, { status: 400 });
       }
 
-      console.log(`Processing payment for user ${userId}: ${credits} credits for $${amount}`);
+      console.log(`Webhook: Processing payment for user ${userId}: ${credits} credits for $${amount}`);
 
       // Try to get current subscription
       let currentSubscription = null;
       try {
+        console.log('Webhook: Checking for existing subscription...');
         const { data, error } = await supabase
           .from('user_subscriptions')
           .select('*')
@@ -83,13 +103,15 @@ export async function POST(request: NextRequest) {
 
         if (!error && data) {
           currentSubscription = data;
-          console.log(`Found existing subscription for user ${userId}:`, {
+          console.log(`Webhook: Found existing subscription for user ${userId}:`, {
             currentCredits: data.interview_time_remaining,
             totalCredits: data.interview_time_total
           });
+        } else {
+          console.log('Webhook: No existing subscription found, will create new one');
         }
       } catch (fetchError) {
-        console.log('No existing subscription found, will create new one');
+        console.log('Webhook: Error checking existing subscription:', fetchError);
       }
 
       if (currentSubscription) {
@@ -97,7 +119,7 @@ export async function POST(request: NextRequest) {
         const newCredits = currentSubscription.interview_time_remaining + parseInt(credits);
         const newTotal = currentSubscription.interview_time_total + parseInt(credits);
         
-        console.log(`Updating subscription for user ${userId}:`, {
+        console.log(`Webhook: Updating subscription for user ${userId}:`, {
           oldCredits: currentSubscription.interview_time_remaining,
           newCredits: newCredits,
           addedCredits: parseInt(credits)
@@ -113,12 +135,12 @@ export async function POST(request: NextRequest) {
           .eq('id', currentSubscription.id);
 
         if (updateError) {
-          console.error('Error updating subscription:', updateError);
+          console.error('Webhook: Error updating subscription:', updateError);
           return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
         }
       } else {
         // Create new subscription
-        console.log(`Creating new subscription for user ${userId}:`, {
+        console.log(`Webhook: Creating new subscription for user ${userId}:`, {
           initialCredits: parseInt(credits),
           packageId: packageId
         });
@@ -134,16 +156,36 @@ export async function POST(request: NextRequest) {
           });
 
         if (createError) {
-          console.error('Error creating subscription:', createError);
+          console.error('Webhook: Error creating subscription:', createError);
           return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
         }
       }
 
-      console.log(`✅ Successfully added ${credits} credits to user ${userId}`);
+      console.log(`Webhook: ✅ Successfully added ${credits} credits to user ${userId}`);
+      
+      // Log the final state for debugging
+      try {
+        const { data: finalSubscription } = await supabase
+          .from('user_subscriptions')
+          .select('interview_time_remaining, interview_time_total, leftover_seconds')
+          .eq('user_id', userId)
+          .single();
+          
+        if (finalSubscription) {
+          console.log(`Webhook: Final subscription state for user ${userId}:`, {
+            remainingCredits: finalSubscription.interview_time_remaining,
+            totalCredits: finalSubscription.interview_time_total,
+            leftoverSeconds: finalSubscription.leftover_seconds
+          });
+        }
+      } catch (logError) {
+        console.log('Webhook: Error logging final state:', logError);
+      }
 
       // Create invoice for the purchase
       if (session.customer) {
         try {
+          console.log('Webhook: Creating invoice...');
           const invoice = await stripe.invoices.create({
             customer: session.customer,
             collection_method: 'send_invoice',
@@ -190,21 +232,21 @@ export async function POST(request: NextRequest) {
               });
 
             if (invoiceStoreError) {
-              console.error('Error storing invoice in database:', invoiceStoreError);
+              console.error('Webhook: Error storing invoice in database:', invoiceStoreError);
             } else {
-              console.log(`💾 Invoice stored in database for user ${userId}`);
+              console.log(`Webhook: 💾 Invoice stored in database for user ${userId}`);
             }
           } catch (dbError) {
-            console.error('Error storing invoice in database:', dbError);
+            console.error('Webhook: Error storing invoice in database:', dbError);
           }
           
-          console.log(`📧 Invoice created and sent for user ${userId}:`, {
+          console.log(`Webhook: 📧 Invoice created and sent for user ${userId}:`, {
             invoiceId: invoice.id,
             amount: amount,
             package: packageInfo.name
           });
         } catch (invoiceError) {
-          console.error('Error creating invoice:', invoiceError);
+          console.error('Webhook: Error creating invoice:', invoiceError);
           // Don't fail the webhook if invoice creation fails
           // The credits were already added successfully
         }
@@ -217,7 +259,12 @@ export async function POST(request: NextRequest) {
       });
       
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      console.error('Webhook: Error processing webhook:', error);
+      console.error('Webhook: Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        error: error
+      });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   }

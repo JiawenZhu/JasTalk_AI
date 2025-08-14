@@ -6,12 +6,16 @@ import { CheckIcon, CreditCard } from 'lucide-react';
 import { CREDIT_PACKAGES } from '@/lib/credit-packages';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
+import { getStripeConfig } from '@/lib/stripe';
+
 // Load client-side Stripe in a browser-safe way
 const loadClientStripe = async () => {
   if (typeof window === 'undefined') return null;
   const { loadStripe } = await import('@stripe/stripe-js');
-  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST;
-  return loadStripe(publishableKey as string);
+  
+  // Get the correct publishable key based on current Stripe mode
+  const config = getStripeConfig();
+  return loadStripe(config.publishableKey);
 };
 
 interface CreditPurchaseProps {

@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/auth.context";
 import { toast } from "@/components/ui/use-toast";
 import Navbar from "@/components/navbar";
 
+
 export const dynamic = 'force-dynamic';
 
 interface Question {
@@ -72,12 +73,101 @@ export default function ContinuePracticePage({
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
   const [isRegeneratingQuestion, setIsRegeneratingQuestion] = useState<string | null>(null);
   
+  // Timer state for interview duration and credit tracking
+  const [interviewStarted, setInterviewStarted] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState<number>(0); // Time used (counting UP)
+  const [maxInterviewTime, setMaxInterviewTime] = useState<number>(180); // 3 minutes max
+  const [totalInterviewTime, setTotalInterviewTime] = useState<number>(0);
+  const [retellSessionTime, setRetellSessionTime] = useState<number>(180); // 3 minutes in seconds
+  const [lastCreditDeduction, setLastCreditDeduction] = useState<number>(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const webClientRef = useRef<any>(null);
   const [isMockMode, setIsMockMode] = useState(false);
   const handlersBoundRef = useRef(false);
   const lastTurnRef = useRef<'user' | 'agent'>('user');
   const lastCompletionAtRef = useRef<number>(0);
   const lastComputedFromTranscriptRef = useRef<number>(0);
+
+  // Format time display (e.g., 1:23 for 83 seconds)
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Timer callback function to update elapsed time
+  const handleTimeUpdate = (seconds: number) => {
+    setElapsedTime(seconds);
+    setTotalInterviewTime(seconds);
+    
+    // Debug: Log every 10 seconds
+    if (seconds % 10 === 0) {
+      console.log(`⏰ Timer Debug - Elapsed: ${seconds}s, Total: ${seconds}s`);
+    }
+    
+    // Check if we've reached max interview time
+    if (seconds >= maxInterviewTime) {
+      console.log('⏰ Max interview time reached, ending interview');
+      // For now, just stop the timer when max time is reached
+      setIsCallStarted(false);
+    }
+  };
+
+  // Timer useEffect for interview duration
+  useEffect(() => {
+    console.log('🔄 Timer useEffect triggered - isCallStarted:', isCallStarted);
+    
+    if (isCallStarted) {
+      console.log('🚀 Starting interview timer');
+      
+      // Clear any existing timer before starting a new one
+      if (intervalRef.current) {
+        console.log('🛑 Clearing existing timer before starting new one');
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
+      // Start interview timer
+      intervalRef.current = setInterval(() => {
+        console.log('⏰ Timer tick - elapsedTime:', elapsedTime);
+        
+        // Count UP: increment elapsed time
+        setElapsedTime(prev => {
+          const newTime = prev + 1;
+          console.log('⏰ Timer updating - prev:', prev, 'newTime:', newTime);
+          
+          // Track total interview time
+          setTotalInterviewTime(newTime);
+          
+          // Debug: Log every 10 seconds to see what's happening
+          if (newTime % 10 === 0) {
+            console.log(`⏰ Timer Debug - Elapsed: ${newTime}s, Total: ${newTime}s`);
+          }
+          
+          return newTime;
+        });
+      }, 1000);
+      
+      console.log('✅ Timer started successfully with interval:', intervalRef.current);
+    } else {
+      console.log('⏸️ Timer not started - isCallStarted:', isCallStarted);
+      
+      // Clear timer if conditions are not met
+      if (intervalRef.current) {
+        console.log('🛑 Clearing timer - conditions not met');
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (intervalRef.current) {
+        console.log('🛑 Cleaning up timer in useEffect cleanup');
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isCallStarted, elapsedTime]); // Depend on isCallStarted and elapsedTime
 
   // Mock session data - in real app, this would be fetched from database
   const mockSession: PracticeSession = {
@@ -168,6 +258,130 @@ return;
     loadPracticeSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    if (session) {
+      setInterviewStarted(true);
+      setRetellSessionTime(180); // Reset timer for each new session
+      setTotalInterviewTime(0); // Reset total interview time
+      setLastCreditDeduction(0); // Reset last credit deduction
+    }
+  }, [currentQuestionIndex, session]);
+
+  // Timer useEffect for interview duration and credit deduction
+  useEffect(() => {
+    console.log('🔄 Timer useEffect triggered - interviewStarted:', interviewStarted, 'isCallStarted:', isCallStarted);
+    
+    if (interviewStarted && isCallStarted) {
+      console.log('🚀 Starting interview timer - interviewStarted:', interviewStarted, 'isCallStarted:', isCallStarted);
+      
+      // Start interview timer
+      intervalRef.current = setInterval(() => {
+        console.log('⏰ Timer tick - retellSessionTime:', retellSessionTime);
+        setRetellSessionTime(prev => {
+          if (prev <= 0) {
+            endVoiceInterview();
+            
+            return prev;
+          }
+          
+          // Track total interview time
+          setTotalInterviewTime(prevTime => prevTime + 1);
+          
+          // Calculate elapsed time (how much time has been used)
+          const elapsedTime = 180 - prev; // 180 is the starting time
+          
+          // Debug: Log every 10 seconds to see what's happening
+          if (elapsedTime % 10 === 0) {
+            console.log(`⏰ Timer Debug - Elapsed: ${elapsedTime}s, Remaining: ${prev}s, Total: ${totalInterviewTime}s`);
+          }
+          
+          // NO credit deduction during interview - just track time
+          // Credits will be deducted 5 seconds AFTER interview ends
+          
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      console.log('⏸️ Timer not started - interviewStarted:', interviewStarted, 'isCallStarted:', isCallStarted);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        console.log('🛑 Clearing interview timer');
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [interviewStarted, isCallStarted]);
+
+  // Function to deduct credits with smart logic
+  const deductCredits = async (totalSeconds: number) => {
+    try {
+      console.log(`🔍 Smart credit deduction called with ${totalSeconds} seconds`);
+      console.log(`🔍 User: ${user?.email}, Authenticated: ${isAuthenticated}`);
+      
+      // Only deduct credits for authenticated users
+      if (!user || !isAuthenticated) {
+        console.log('⚠️ Skipping credit deduction - user not authenticated');
+        return;
+      }
+      
+      console.log(`💰 Attempting to deduct credits for ${totalSeconds} seconds...`);
+      
+      const response = await fetch('/api/deduct-credits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ totalSeconds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Successfully deducted ${data.deductedMinutes} minute(s). Remaining: ${data.remainingCredits} minutes. Leftover: ${data.leftoverSeconds}s`);
+        
+        // Update last credit deduction time
+        setLastCreditDeduction(totalInterviewTime);
+        
+        // Show toast notification
+        toast({
+          title: "Credits Updated",
+          description: `Used ${data.deductedMinutes} minute(s). ${data.remainingCredits} minutes remaining.`,
+        });
+        
+        // Dispatch event to refresh dashboard subscription data
+        window.dispatchEvent(new CustomEvent('credits-updated', {
+          detail: { remainingCredits: data.remainingCredits }
+        }));
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to deduct credits:', errorData.error);
+        
+        if (errorData.error === 'Insufficient credits') {
+          toast({
+            title: "Insufficient Credits",
+            description: "You've run out of interview time. Please purchase more credits to continue.",
+            variant: "destructive",
+          });
+          // End the interview if no credits left
+          endVoiceInterview();
+        } else {
+          toast({
+            title: "Credit Deduction Failed",
+            description: errorData.error || "Failed to deduct credits. Please try again.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error deducting credits:', error);
+      toast({
+        title: "Credit Deduction Error",
+        description: "Failed to deduct credits. Please check your connection and try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const initializeRetellClient = async (practiceSession: PracticeSession) => {
     try {
@@ -423,24 +637,40 @@ return next;
       
       toast({
         title: "Interview Completed",
-        description: "Your practice interview has been completed.",
+        description: "Your practice interview has been completed. Processing credits in 5 seconds...",
       });
       
-      // Redirect to history page
-      setTimeout(() => {
-        router.push('/practice/history');
-      }, 2000);
+      // Wait 5 seconds, then process credits and redirect to feedback
+      setTimeout(async () => {
+        try {
+          console.log(`🔍 Processing interview completion after 5 seconds...`);
+          console.log(`🔍 totalInterviewTime: ${totalInterviewTime} seconds`);
+          console.log(`🔍 isAuthenticated: ${isAuthenticated}, user: ${user?.email}`);
+          
+          // Process smart credit deduction
+          if (isAuthenticated && user) {
+            console.log(`💰 Calling deductCredits with ${totalInterviewTime} seconds`);
+            await deductCredits(totalInterviewTime);
+          } else {
+            console.log('⚠️ Skipping credit deduction - not authenticated');
+          }
+
+          // Redirect to feedback page with session data
+          console.log(`🔄 Redirecting to feedback page with sessionId: ${session?.id || 'unknown'}, duration: ${totalInterviewTime}`);
+          router.push(`/feedback?sessionId=${session?.id || 'unknown'}&duration=${totalInterviewTime}`);
+          
+        } catch (error) {
+          console.error('Error processing interview completion:', error);
+          // Fallback: redirect to dashboard
+          router.push('/dashboard');
+        }
+      }, 5000);
     } catch (error) {
       console.error('Error ending voice interview:', error);
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    
-return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  
 
   const handleEditQuestion = (questionId: string) => {
     setEditingQuestion(questionId);
@@ -645,7 +875,7 @@ return;
             <h2 className="text-lg font-semibold text-gray-900">Session Progress</h2>
             <div className="flex items-center space-x-2 text-sm text-gray-500">
               <ClockIcon className="w-4 h-4" />
-              <span>{session?.duration ? formatTime(session.duration) : '0:00'}</span>
+              <span>{formatTime(elapsedTime)}</span>
             </div>
           </div>
           
@@ -689,7 +919,7 @@ return;
                   </p>
                 </div>
                 
-            <div className="bg-blue-50 rounded-lg p-4 text-left">
+                            <div className="bg-blue-50 rounded-lg p-4 text-left">
                   <h3 className="font-medium text-blue-900 mb-2">Next Question:</h3>
                   <p className="text-sm text-blue-800">
                     {session?.questions && session.questions.length > 0 
@@ -697,6 +927,8 @@ return;
                       : 'No questions found for this session.'}
                   </p>
                 </div>
+
+
 
                 <motion.button
                   whileTap={{ scale: 0.95 }}
@@ -896,4 +1128,4 @@ return;
       </div>
     </div>
   );
-} 
+}

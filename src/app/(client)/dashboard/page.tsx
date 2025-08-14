@@ -162,6 +162,20 @@ return;
     }
   }, [isAuthenticated, user, fetchSubscription]);
 
+  // Listen for credits updates from interview page
+  useEffect(() => {
+    const handleCreditsUpdated = () => {
+      console.log('🔄 Credits updated, refreshing subscription data...');
+      fetchSubscription();
+    };
+
+    window.addEventListener('credits-updated', handleCreditsUpdated);
+    
+    return () => {
+      window.removeEventListener('credits-updated', handleCreditsUpdated);
+    };
+  }, [fetchSubscription]);
+
   // Handle payment success
   useEffect(() => {
     const success = searchParams.get('success');

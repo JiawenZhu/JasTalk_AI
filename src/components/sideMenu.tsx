@@ -12,13 +12,70 @@ function SideMenu() {
   const [mounted, setMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+
+  // Fetch subscription data
+  const fetchSubscription = async () => {
+    if (!isAuthenticated) {
+      setSubscription(null);
+      return;
+    }
+
+    try {
+      setSubscriptionLoading(true);
+      const response = await fetch('/api/user-subscription');
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSubscription(data.subscription);
+      }
+    } catch (error) {
+      console.error('Error fetching subscription in sideMenu:', error);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Temporarily disable subscription fetching to prevent infinite loop
-  // Will re-enable once the database schema is properly set up
+  // Fetch subscription when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSubscription();
+    } else {
+      setSubscription(null);
+    }
+  }, [isAuthenticated]);
+
+  // Listen for credits updates from interview page
+  useEffect(() => {
+    const handleCreditsUpdated = () => {
+      console.log('🔄 SideMenu: Credits updated, refreshing subscription data...');
+      fetchSubscription();
+    };
+
+    window.addEventListener('credits-updated', handleCreditsUpdated);
+    
+    return () => {
+      window.removeEventListener('credits-updated', handleCreditsUpdated);
+    };
+  }, []);
+
+  // Listen for payment success
+  useEffect(() => {
+    const handlePaymentSuccess = () => {
+      console.log('🔄 SideMenu: Payment successful, refreshing subscription data...');
+      fetchSubscription();
+    };
+
+    window.addEventListener('payment-success', handlePaymentSuccess);
+    
+    return () => {
+      window.removeEventListener('payment-success', handlePaymentSuccess);
+    };
+  }, []);
 
   const handleNavigation = (path: string) => {
     if (pathname === path) {return;}
@@ -142,13 +199,21 @@ function SideMenu() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-gray-600">Credits</span>
                     <span className="text-sm font-bold text-green-600">
-                      ${subscription?.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}
+                      {subscriptionLoading ? (
+                        <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
+                      ) : (
+                        `$${subscription?.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}`
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-600">Time</span>
                     <span className="text-xs text-gray-700">
-                      {subscription?.interview_time_remaining || 0} min
+                      {subscriptionLoading ? (
+                        <div className="w-8 h-3 bg-gray-200 rounded animate-pulse" />
+                      ) : (
+                        `${subscription?.interview_time_remaining || 0} min`
+                      )}
                     </span>
                   </div>
                 </div>

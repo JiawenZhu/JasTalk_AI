@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/components/ui/use-toast';
+// Removed InterviewTimer import - using built-in timer display
+import { useAuth } from '@/contexts/auth.context';
 
 interface Question {
   id: string;
@@ -38,6 +40,7 @@ interface InterviewResults {
 
 export default function PracticeInterviewPage() {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
   const [session, setSession] = useState<PracticeSession | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
@@ -78,6 +81,12 @@ export default function PracticeInterviewPage() {
   const [error, setError] = useState<string | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  
+  // Timer state for tracking interview duration
+  const [elapsedTime, setElapsedTime] = useState<number>(0); // Time used (counting UP)
+  const [maxInterviewTime, setMaxInterviewTime] = useState<number>(180); // 3 minutes max
+  const [totalInterviewTime, setTotalInterviewTime] = useState<number>(0); // Total time spent in interview
+  const [lastCreditDeduction, setLastCreditDeduction] = useState<number>(0); // Last time credits were deducted
 
   useEffect(() => {
     // Get session data from localStorage
@@ -89,6 +98,25 @@ export default function PracticeInterviewPage() {
         const parsedSession = JSON.parse(storedSession);
         console.log('🔍 Interview page - parsed session:', parsedSession);
         setSession(parsedSession);
+        
+        // Check if timer was already started from setup page
+        if (parsedSession.interviewStarted && parsedSession.timerStartTime) {
+          console.log('🔍 Interview page - Timer was already started, continuing...');
+          setInterviewStarted(true);
+          setIsConnected(true);
+          
+          // Calculate how much time has passed since timer started
+          const now = Date.now();
+          const elapsedSinceStart = Math.floor((now - parsedSession.timerStartTime) / 1000);
+          console.log('🔍 Interview page - Elapsed time since start:', elapsedSinceStart, 'seconds');
+          
+          // Update timer state to reflect elapsed time
+          if (elapsedSinceStart > 0) {
+            setElapsedTime(elapsedSinceStart);
+            setTotalInterviewTime(elapsedSinceStart);
+            setMaxInterviewTime(parsedSession.maxInterviewTime || 180);
+          }
+        }
       } catch (error) {
         console.error('Error parsing session:', error);
       }
@@ -164,26 +192,112 @@ export default function PracticeInterviewPage() {
     }
   }, []);
 
+  // Removed handleTimeUpdate - now handled by main timer useEffect
+
+  // Main timer useEffect - consolidates all timer logic
   useEffect(() => {
     if (interviewStarted && isConnected) {
-      // Start interview timer
-      intervalRef.current = setInterval(() => {
-        setRetellSessionTime(prev => {
-          if (prev <= 0) {
-            handleEndInterview();
-            return prev;
+      console.log('🚀 Starting main interview timer');
+      
+      const timer = setInterval(() => {
+        setTotalInterviewTime(prev => {
+          const newTime = prev + 1;
+          setElapsedTime(newTime);
+          
+          // Debug: Log every 10 seconds
+          if (newTime % 10 === 0) {
+            console.log(`⏰ Main timer update: ${newTime}s`);
           }
-          return prev - 1;
+          
+          // Check if we've reached max interview time
+          if (newTime >= maxInterviewTime) {
+            console.log('⏰ Max interview time reached, ending interview');
+            handleEndInterview();
+          }
+          
+          return newTime;
         });
       }, 1000);
-    }
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      return () => {
+        console.log('🛑 Clearing main interview timer');
+        clearInterval(timer);
+      };
+    } else {
+      console.log('⏸️ Timer not started - interviewStarted:', interviewStarted, 'isConnected:', isConnected);
+    }
+  }, [interviewStarted, isConnected, maxInterviewTime]);
+
+  // Function to deduct credits with smart logic
+  const deductCredits = async (totalSeconds: number) => {
+    try {
+      console.log(`🔍 Smart credit deduction called with ${totalSeconds} seconds`);
+      console.log(`🔍 User: ${user?.email}, Authenticated: ${isAuthenticated}`);
+      
+      // Only deduct credits for authenticated users
+      if (!user || !isAuthenticated) {
+        console.log('⚠️ Skipping credit deduction - user not authenticated');
+        return;
       }
-    };
-  }, [interviewStarted, isConnected, retellSessionTime]);
+      
+      console.log(`💰 Attempting to deduct credits for ${totalSeconds} seconds...`);
+      
+      const response = await fetch('/api/deduct-credits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ totalSeconds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Successfully deducted ${data.deductedMinutes} minute(s). Remaining: ${data.remainingCredits} minutes. Leftover: ${data.leftoverSeconds}s`);
+        
+        // Update last credit deduction time
+        setLastCreditDeduction(totalInterviewTime);
+        
+        // Show toast notification
+        toast({
+          title: "Credits Updated",
+          description: `Used ${data.deductedMinutes} minute(s). ${data.remainingCredits} minutes remaining.`,
+        });
+        
+        // Dispatch event to refresh dashboard subscription data
+        window.dispatchEvent(new CustomEvent('credits-updated', {
+          detail: { remainingCredits: data.remainingCredits }
+        }));
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to deduct credits:', errorData.error);
+        
+        if (errorData.error === 'Insufficient credits') {
+          toast({
+            title: "Insufficient Credits",
+            description: "You've run out of interview time. Please purchase more credits to continue.",
+            variant: "destructive",
+          });
+          // End the interview if no credits left
+          handleEndInterview();
+        } else {
+          toast({
+            title: "Credit Deduction Failed",
+            description: errorData.error || "Failed to deduct credits. Please try again.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error deducting credits:', error);
+      toast({
+        title: "Credit Deduction Error",
+        description: "Failed to deduct credits. Please check your connection and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Removed old conflicting timer - now using consolidated main timer above
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -216,7 +330,8 @@ export default function PracticeInterviewPage() {
       setupRetellEventHandlers(webClient);
       
       console.log('✅ Retell Web Client initialized successfully');
-      return true;
+      
+return true;
       
     } catch (error) {
       console.error('❌ Error initializing Retell client:', error);
@@ -225,7 +340,8 @@ export default function PracticeInterviewPage() {
         description: "Failed to initialize voice client. Using browser speech as fallback.",
         variant: "destructive"
       });
-      return false;
+      
+return false;
     }
   };
 
@@ -468,20 +584,49 @@ export default function PracticeInterviewPage() {
     
     toast({
       title: "Interview Ended",
-      description: "Your practice interview session has been completed.",
+      description: "Your practice interview session has been completed. Processing credits in 5 seconds...",
     });
+
+    // Wait 5 seconds, then process credits and redirect to feedback
+    setTimeout(async () => {
+      try {
+        console.log(`🔍 Processing interview completion after 5 seconds...`);
+        console.log(`🔍 totalInterviewTime: ${totalInterviewTime} seconds`);
+        console.log(`🔍 isAuthenticated: ${isAuthenticated}, user: ${user?.email}`);
+        
+        // Process smart credit deduction
+        if (isAuthenticated && user) {
+          console.log(`💰 Calling deductCredits with ${totalInterviewTime} seconds`);
+          await deductCredits(totalInterviewTime);
+        } else {
+          console.log('⚠️ Skipping credit deduction - not authenticated');
+        }
+
+        // Redirect to feedback page with session data
+        const sessionId = session?.id || 'unknown';
+        console.log(`🔄 Redirecting to feedback page with sessionId: ${sessionId}, duration: ${totalInterviewTime}`);
+        router.push(`/feedback?sessionId=${sessionId}&duration=${totalInterviewTime}`);
+        
+      } catch (error) {
+        console.error('Error processing interview completion:', error);
+        // Fallback: redirect to dashboard
+        router.push('/dashboard');
+      }
+    }, 5000);
   };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    
+return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleStartInterview = async () => {
     if (!session) {
       alert('No session data available');
-      return;
+      
+return;
     }
 
     try {
@@ -513,7 +658,8 @@ export default function PracticeInterviewPage() {
         const fallbackResponse = `Hello! I'm ${session?.interviewer?.name || 'your AI interviewer'}, your AI interviewer. Let's begin the practice interview. The first question is: ${session?.questions[0]?.text || 'Tell me about yourself.'}`;
         setGeminiResponse(fallbackResponse);
         speakText(fallbackResponse, 'Zephyr');
-        return;
+        
+return;
       }
 
       // Call the free interview API to get initial response and Retell agent connection
@@ -582,9 +728,11 @@ export default function PracticeInterviewPage() {
                   title: "Retell Session Expired",
                   description: "Your 3-minute free Retell session has ended. Upgrade to Pro for unlimited access.",
                 });
-                return 0;
+                
+return 0;
               }
-              return prev - 1;
+              
+return prev - 1;
             });
           }, 1000);
 
@@ -925,7 +1073,8 @@ export default function PracticeInterviewPage() {
   const speakEnhancedText = (text: string, voicePreference: string, voiceOptions: any) => {
     if (!speechSynthesisRef.current) {
       console.error('❌ Speech synthesis not available');
-      return;
+      
+return;
     }
 
     // Stop any current speech
@@ -991,7 +1140,7 @@ export default function PracticeInterviewPage() {
     return (
       <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">Loading interview session...</p>
         </div>
       </div>
@@ -1089,8 +1238,8 @@ export default function PracticeInterviewPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.back()}
             className="p-2"
+            onClick={() => router.back()}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -1106,14 +1255,14 @@ export default function PracticeInterviewPage() {
             </Badge>
             {interviewStarted && (
               <Badge variant="outline" className="text-orange-600">
-                ⏱️ {formatTime(timeRemaining)} remaining
+                ⏱️ {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')} used
               </Badge>
             )}
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleEndInterview}
               className="text-red-600 hover:text-red-700"
+              onClick={handleEndInterview}
             >
               End Interview
             </Button>
@@ -1138,9 +1287,9 @@ export default function PracticeInterviewPage() {
             </p>
             
             <Button
-              onClick={startOpenAIInterview}
               disabled={isGeminiLoading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-3"
+              onClick={startOpenAIInterview}
             >
               {isGeminiLoading ? (
                 <>
@@ -1195,13 +1344,27 @@ export default function PracticeInterviewPage() {
                   <p className="text-xs text-blue-600 mt-1">OpenAI + Retell Agent (FREE - 3 min limit)</p>
                 </div>
 
+                {/* Interview Timer Display */}
+                {interviewStarted && (
+                  <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                      </div>
+                      <div className="text-sm text-blue-500">
+                        Time Used / {Math.floor(maxInterviewTime / 60)}:{(maxInterviewTime % 60).toString().padStart(2, '0')} Max
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Interview Controls */}
                 <div className="space-y-4">
                   <Button
-                    onClick={toggleConnection}
                     variant={isConnected ? "default" : "outline"}
                     className="w-full"
                     disabled={!interviewStarted}
+                    onClick={toggleConnection}
                   >
                     {isConnected ? (
                       <>
@@ -1217,10 +1380,10 @@ export default function PracticeInterviewPage() {
                   </Button>
 
                   <Button
-                    onClick={toggleRecording}
                     variant={isRecording ? "destructive" : "outline"}
                     className="w-full"
                     disabled={!isConnected}
+                    onClick={toggleRecording}
                   >
                     {isRecording ? (
                       <>
@@ -1236,10 +1399,10 @@ export default function PracticeInterviewPage() {
                   </Button>
 
                   <Button
-                    onClick={toggleMute}
                     variant={isMuted ? "secondary" : "outline"}
                     className="w-full"
                     disabled={!isConnected}
+                    onClick={toggleMute}
                   >
                     {isMuted ? (
                       <>
@@ -1257,9 +1420,9 @@ export default function PracticeInterviewPage() {
                   {/* Audio Playback Control */}
                   {currentAudio && (
                     <Button
-                      onClick={togglePlayPause}
                       variant="outline"
                       className="w-full"
+                      onClick={togglePlayPause}
                     >
                       {isPlaying ? (
                         <>
@@ -1278,9 +1441,9 @@ export default function PracticeInterviewPage() {
                   {/* Speech Synthesis Control */}
                   {geminiResponse && (
                     <Button
-                      onClick={isPlaying ? stopSpeech : () => speakText(geminiResponse, 'Zephyr')}
                       variant="outline"
                       className="w-full"
+                      onClick={isPlaying ? stopSpeech : () => speakText(geminiResponse, 'Zephyr')}
                     >
                       {isPlaying ? (
                         <>
@@ -1298,27 +1461,27 @@ export default function PracticeInterviewPage() {
 
                   {/* Test Voice Button */}
                   <Button
-                    onClick={testVoice}
                     variant="outline"
                     className="w-full"
+                    onClick={testVoice}
                   >
                     🎤 Test Voice System
                   </Button>
 
                   {/* Test Audio Button */}
                   <Button
-                    onClick={testAudio}
                     variant="outline"
                     className="w-full"
+                    onClick={testAudio}
                   >
                     🔊 Test Audio System
                   </Button>
 
                   {/* Test Fallback Speech Button */}
                   <Button
-                    onClick={() => speakTextFallback('Hello! This is a test of the fallback voice system.')}
                     variant="outline"
                     className="w-full"
+                    onClick={() => speakTextFallback('Hello! This is a test of the fallback voice system.')}
                   >
                     🎭 Test Fallback Voice
                   </Button>
@@ -1331,8 +1494,8 @@ export default function PracticeInterviewPage() {
                       </label>
                       <select
                         value={selectedVoice}
-                        onChange={(e) => setSelectedVoice(e.target.value)}
                         className="w-full text-xs border border-gray-300 rounded-md px-2 py-1 bg-white"
+                        onChange={(e) => setSelectedVoice(e.target.value)}
                       >
                         {availableVoices.map((voice) => (
                           <option key={voice.name} value={voice.name}>
@@ -1347,10 +1510,10 @@ export default function PracticeInterviewPage() {
                           🎭 Zephyr Mode
                         </label>
                         <button
-                          onClick={() => setZephyrMode(!zephyrMode)}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                             zephyrMode ? 'bg-blue-600' : 'bg-gray-300'
                           }`}
+                          onClick={() => setZephyrMode(!zephyrMode)}
                         >
                           <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1379,7 +1542,7 @@ export default function PracticeInterviewPage() {
                     <div 
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${((currentQuestionIndex + 1) / session.questions.length) * 100}%` }}
-                    ></div>
+                     />
                   </div>
                   <div className="text-xs text-gray-500 text-center mt-2">
                     Time: {formatTime(retellSessionTime)} / {formatTime(180)}
@@ -1424,7 +1587,7 @@ export default function PracticeInterviewPage() {
                     {currentAudioUrl && currentAudioUrl === 'retell_agent_connected' ? (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center gap-2 text-blue-800">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                           <span className="text-sm font-medium">🎤 Retell Lisa Agent Connected!</span>
                         </div>
                         <p className="text-xs text-blue-600 mt-1">
@@ -1447,13 +1610,13 @@ export default function PracticeInterviewPage() {
                             <div 
                               className="bg-blue-600 h-2 rounded-full transition-all duration-1000"
                               style={{ width: `${(retellSessionTime / 180) * 100}%` }}
-                            ></div>
+                             />
                           </div>
                         </div>
                         
                         {/* Interview Status */}
                         <div className="mt-4 flex items-center justify-center space-x-2">
-                          <div className={`w-4 h-4 rounded-full ${isCalling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                          <div className={`w-4 h-4 rounded-full ${isCalling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
                           <span className="text-lg font-semibold text-gray-900">
                             {isCalling ? 'Interview Active' : 'Interview Paused'}
                           </span>
@@ -1519,9 +1682,9 @@ export default function PracticeInterviewPage() {
                         
                         {/* End Interview Button */}
                         <Button
-                          onClick={handleEndInterview}
                           variant="destructive"
                           className="w-full mt-4"
+                          onClick={handleEndInterview}
                         >
                           <X className="h-4 w-4 mr-2" />
                           End Interview
@@ -1536,7 +1699,7 @@ export default function PracticeInterviewPage() {
                     ) : currentAudioUrl && currentAudioUrl === 'retell_session_expired' ? (
                        <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
                          <div className="flex items-center gap-2 text-orange-800">
-                           <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                           <div className="w-2 h-2 bg-orange-500 rounded-full" />
                            <span className="text-sm font-medium">⏰ Retell Session Expired</span>
                          </div>
                          <p className="text-xs text-orange-600 mt-1">
@@ -1563,7 +1726,7 @@ export default function PracticeInterviewPage() {
                      ) : currentAudioUrl && currentAudioUrl.includes('ENHANCED_BROWSER_SPEECH') ? (
                       <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
                         <div className="flex items-center gap-2 text-green-800">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                           <span className="text-sm font-medium">Enhanced Browser Speech Active</span>
                         </div>
                         <p className="text-xs text-green-600 mt-1">
@@ -1586,16 +1749,16 @@ export default function PracticeInterviewPage() {
                 {/* Question Navigation */}
                 <div className="flex justify-between">
                   <Button
-                    onClick={handlePreviousQuestion}
                     variant="outline"
                     disabled={currentQuestionIndex === 0 || isGeminiLoading}
+                    onClick={handlePreviousQuestion}
                   >
                     Previous Question
                   </Button>
                   <Button
-                    onClick={handleNextQuestion}
                     variant="outline"
                     disabled={currentQuestionIndex === session.questions.length - 1 || isGeminiLoading}
+                    onClick={handleNextQuestion}
                   >
                     Next Question
                   </Button>

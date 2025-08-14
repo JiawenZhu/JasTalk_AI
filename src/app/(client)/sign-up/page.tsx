@@ -49,24 +49,30 @@ export default function SignUpPage() {
   const validateForm = () => {
     if (!formData.firstName.trim()) {
       setError('First name is required');
+      
       return false;
     }
     if (!formData.email.trim()) {
       setError('Email is required');
+      
       return false;
     }
     if (!formData.email.includes('@')) {
       setError('Please enter a valid email address');
+      
       return false;
     }
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
+      
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      
       return false;
     }
+    
     return true;
   };
 
@@ -78,6 +84,7 @@ export default function SignUpPage() {
 
     if (!validateForm()) {
       setLoading(false);
+      
       return;
     }
 

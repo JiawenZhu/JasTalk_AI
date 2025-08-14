@@ -31,6 +31,10 @@ export default function PracticeSetupPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedInterviewer, setSelectedInterviewer] = useState<Interviewer | null>(null);
   const [userName, setUserName] = useState('User');
+  
+  // Credit tracking state
+  const [subscription, setSubscription] = useState<any>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   // Mock interviewer data (in a real app, this would come from an API)
   const availableInterviewers: Interviewer[] = [
@@ -83,6 +87,27 @@ export default function PracticeSetupPage() {
     setUserName(storedUserName);
   }, [searchParams]);
 
+  // Fetch subscription data for credit display
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        setSubscriptionLoading(true);
+        const response = await fetch('/api/user-subscription');
+        
+        if (response.ok) {
+          const data = await response.json();
+          setSubscription(data.subscription);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription in setup page:', error);
+      } finally {
+        setSubscriptionLoading(false);
+      }
+    };
+
+    fetchSubscription();
+  }, []);
+
   const handleStartInterview = async () => {
     if (!selectedInterviewer || questions.length === 0) {
       alert('Please select an interviewer and ensure questions are available');
@@ -90,19 +115,37 @@ export default function PracticeSetupPage() {
     }
 
     try {
-      // Create a practice session
+      // Start the timer immediately when button is clicked
+      const interviewStartTime = new Date().toISOString();
+      const timerStartTime = Date.now(); // Current timestamp for timer calculations
+      
+      // Create a practice session with timer information
       const sessionData = {
         interviewer: selectedInterviewer,
         questions: questions,
-        startTime: new Date().toISOString()
+        startTime: interviewStartTime,
+        timerStartTime: timerStartTime, // Store when timer started
+        interviewStarted: true, // Mark as started
+        isConnected: true, // Mark as connected
+        elapsedTime: 0, // Start at 0 seconds (counting UP)
+        maxInterviewTime: 180, // 3 minutes max
+        totalInterviewTime: 0, // Start at 0
+        lastCreditDeduction: 0 // Start at 0
       };
 
-      console.log('🔍 Setup page - Creating session data:', sessionData);
+      console.log('🔍 Setup page - Creating session data with timer:', sessionData);
 
-      // Store session data
+      // Store session data with timer information
       localStorage.setItem('currentPracticeSession', JSON.stringify(sessionData));
       
-      console.log('🔍 Setup page - Session stored in localStorage:', localStorage.getItem('currentPracticeSession'));
+      // Also store timer state separately for immediate access
+      localStorage.setItem('interviewTimerState', JSON.stringify({
+        startTime: timerStartTime,
+        isRunning: true,
+        elapsedTime: 0
+      }));
+      
+      console.log('🔍 Setup page - Session and timer stored in localStorage');
 
       // Redirect to the practice interview page
       router.push('/practice/interview');
@@ -244,6 +287,71 @@ export default function PracticeSetupPage() {
               </p>
             </div>
           )}
+          
+          {/* Credit Balance Display */}
+          <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200 max-w-md mx-auto">
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center space-x-2">
+                <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs">💳</span>
+                </div>
+                <span className="text-sm font-semibold text-green-900">Your Credits</span>
+              </div>
+              
+              {subscriptionLoading ? (
+                <div className="text-sm text-green-600">Loading credits...</div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="text-2xl font-bold text-green-700">
+                    ${subscription?.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}
+                  </div>
+                  <div className="text-sm text-green-600">
+                    {subscription?.interview_time_remaining || 0} minutes remaining
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Timer Preview Section */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 max-w-md mx-auto">
+            <div className="text-center space-y-3">
+              <div className="flex items-center justify-center space-x-2">
+                <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs">⏱️</span>
+                </div>
+                <span className="text-sm font-semibold text-blue-900">Interview Timer</span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-blue-800">3:00</div>
+                  <div className="text-xs text-blue-600">Time Limit</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-green-700">$0.12</div>
+                  <div className="text-xs text-green-600">Per Minute</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-600">After End</div>
+                  <div className="text-xs text-orange-600">Credit Deduction</div>
+                </div>
+              </div>
+              
+              <div className="text-xs text-blue-600">
+                Credits are deducted once after the interview ends (5 second delay)
+              </div>
+              
+              {/* Auto-start indicator */}
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                <div className="flex items-center justify-center space-x-2 text-green-700">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium">Timer starts immediately when you click "Start Voice Interview"</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <Button
             onClick={handleStartInterview}
             disabled={!selectedInterviewer}
