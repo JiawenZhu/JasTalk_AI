@@ -6,25 +6,34 @@ const stripeMode = process.env.STRIPE_MODE || 'test';
 
 // Get the appropriate keys and URLs based on mode
 export const getStripeConfig = () => {
+  // Determine base URL based on environment
+  let baseUrl: string;
+  
+  if (isProduction) {
+    // Production environment - use production URL
+    baseUrl = process.env.NEXT_PUBLIC_BASE_URL_PRODUCTION || 'https://jastalkai-jiawenzhus-projects.vercel.app';
+  } else {
+    // Development environment - use localhost
+    baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  }
+
   // Always use test mode keys when STRIPE_MODE is explicitly set to 'test'
   if (stripeMode === 'test') {
     return {
       secretKey: process.env.STRIPE_SECRET_KEY_TEST!,
       publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST!,
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_TEST!,
-      // Base URL is independent of mode; prefer explicit env override
-      baseUrl: process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL_PRODUCTION || 'http://localhost:3000',
+      baseUrl: baseUrl,
     };
   }
 
-  // Use live mode keys whenever STRIPE_MODE is 'live' (allow local testing with live webhooks)
+  // Use live mode keys whenever STRIPE_MODE is 'live'
   if (stripeMode === 'live') {
     return {
       secretKey: process.env.STRIPE_SECRET_KEY_LIVE!,
       publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE!,
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_LIVE!,
-      // Base URL still prefers local override for development
-      baseUrl: process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL_PRODUCTION || 'https://www.jastalk.com',
+      baseUrl: baseUrl,
     };
   }
   
@@ -33,7 +42,7 @@ export const getStripeConfig = () => {
     secretKey: process.env.STRIPE_SECRET_KEY_TEST!,
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST!,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_TEST!,
-    baseUrl: process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL_PRODUCTION || 'http://localhost:3000',
+    baseUrl: baseUrl,
   };
 };
 
