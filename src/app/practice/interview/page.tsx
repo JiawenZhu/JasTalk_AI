@@ -87,6 +87,34 @@ export default function PracticeInterviewPage() {
   const [maxInterviewTime, setMaxInterviewTime] = useState<number>(180); // 3 minutes max
   const [totalInterviewTime, setTotalInterviewTime] = useState<number>(0); // Total time spent in interview
   const [lastCreditDeduction, setLastCreditDeduction] = useState<number>(0); // Last time credits were deducted
+  
+  // Subscription state for credit display
+  const [subscription, setSubscription] = useState<any>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  
+  // Modal state for pause confirmation
+  const [showPauseModal, setShowPauseModal] = useState(false);
+
+  // Fetch subscription data for credit display
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        setSubscriptionLoading(true);
+        const response = await fetch('/api/user-subscription');
+        
+        if (response.ok) {
+          const data = await response.json();
+          setSubscription(data.subscription);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      } finally {
+        setSubscriptionLoading(false);
+      }
+    };
+
+    fetchSubscription();
+  }, []);
 
   useEffect(() => {
     // Get session data from localStorage
@@ -552,6 +580,172 @@ return false;
     console.log('🛑 Voice conversation stopped');
   };
 
+  // Function to finish practice session permanently
+  const handleFinishPractice = () => {
+    console.log('🛑 Finishing practice session - stopping all activities');
+    
+    // Stop voice conversation
+    stopVoiceConversation();
+    
+    // End Retell call if active
+    if (webClientRef.current && isCalling) {
+      try {
+        webClientRef.current.stopCall();
+        console.log('🎤 Retell call ended');
+      } catch (error) {
+        console.error('❌ Error ending Retell call:', error);
+      }
+    }
+    
+    // Clear all timers
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Stop any ongoing speech synthesis
+    if (speechSynthesisRef.current) {
+      speechSynthesisRef.current.cancel();
+      console.log('🔇 Speech synthesis cancelled');
+    }
+    
+    // Stop any ongoing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      console.log('🔇 Audio playback stopped');
+    }
+    
+    // Reset all interview states
+    setIsRetellActive(false);
+    setIsCalling(false);
+    setIsCallStarted(false);
+    setIsVoiceEnabled(false);
+    setIsConnected(false);
+    setInterviewStarted(false);
+    setCurrentAudioUrl('');
+    setConversationHistory([]);
+    setLastAgentResponse('');
+    setLastUserResponse('');
+    setActiveTurn('user');
+    setElapsedTime(0);
+    setTotalInterviewTime(0);
+    
+    toast({
+      title: "Practice Session Finished",
+      description: "Your practice interview has been completed. Processing credits immediately...",
+    });
+
+    // Process credits immediately and mark as completed
+    setTimeout(async () => {
+      try {
+        console.log(`🔍 Processing interview completion immediately...`);
+        console.log(`🔍 totalInterviewTime: ${totalInterviewTime} seconds`);
+        console.log(`🔍 isAuthenticated: ${isAuthenticated}, user: ${user?.email}`);
+        
+        // Process smart credit deduction
+        if (isAuthenticated && user) {
+          console.log(`💰 Calling deductCredits with ${totalInterviewTime} seconds`);
+          await deductCredits(totalInterviewTime);
+        } else {
+          console.log('⚠️ Skipping credit deduction - not authenticated');
+        }
+
+        // Mark session as completed immediately
+        if (session?.id) {
+          try {
+            await fetch('/api/practice-sessions', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: session.id,
+                status: 'completed',
+                end_time: new Date().toISOString(),
+                duration: totalInterviewTime
+              }),
+            });
+            console.log('✅ Session marked as completed');
+          } catch (error) {
+            console.error('Error updating session status:', error);
+          }
+        }
+
+        // Redirect to feedback page
+        const sessionId = session?.id || 'unknown';
+        console.log(`🔄 Redirecting to feedback page with sessionId: ${sessionId}, duration: ${totalInterviewTime}`);
+        router.push(`/feedback?sessionId=${sessionId}&duration=${totalInterviewTime}`);
+        
+      } catch (error) {
+        console.error('Error processing interview completion:', error);
+        router.push('/dashboard');
+      }
+    }, 1000); // Immediate processing
+  };
+
+  // Function to pause and resume later
+  const handlePauseAndResume = () => {
+    console.log('⏸️ Pausing practice session - stopping all activities');
+    
+    // Stop voice conversation
+    stopVoiceConversation();
+    
+    // End Retell call if active
+    if (webClientRef.current && isCalling) {
+      try {
+        webClientRef.current.stopCall();
+        console.log('🎤 Retell call paused');
+      } catch (error) {
+        console.error('❌ Error pausing Retell call:', error);
+      }
+    }
+    
+    // Clear all timers
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Stop any ongoing speech synthesis
+    if (speechSynthesisRef.current) {
+      speechSynthesisRef.current.cancel();
+      console.log('🔇 Speech synthesis cancelled');
+    }
+    
+    // Stop any ongoing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      console.log('🔇 Audio playback stopped');
+    }
+    
+    // Reset states but keep session data
+    setIsRetellActive(false);
+    setIsCalling(false);
+    setIsCallStarted(false);
+    setIsVoiceEnabled(false);
+    setIsConnected(false);
+    setInterviewStarted(false);
+    setCurrentAudioUrl('');
+    setActiveTurn('user');
+    
+    // Store current progress in localStorage for resume
+    if (session?.id) {
+      const resumeData = {
+        sessionId: session.id,
+        currentQuestionIndex,
+        elapsedTime,
+        totalInterviewTime,
+        conversationHistory,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`resumeSession_${session.id}`, JSON.stringify(resumeData));
+      console.log('💾 Session progress saved for resume');
+    }
+    
+    // Show pause confirmation modal
+    setShowPauseModal(true);
+  };
+
   const handleEndInterview = () => {
     // Stop voice conversation
     stopVoiceConversation();
@@ -584,13 +778,13 @@ return false;
     
     toast({
       title: "Interview Ended",
-      description: "Your practice interview session has been completed. Processing credits in 5 seconds...",
+      description: "Your practice interview session has been paused. Processing credits in 5 seconds...",
     });
 
-    // Wait 5 seconds, then process credits and redirect to feedback
+    // Wait 5 seconds, then process credits for paused session
     setTimeout(async () => {
       try {
-        console.log(`🔍 Processing interview completion after 5 seconds...`);
+        console.log(`🔍 Processing paused interview credits after 5 seconds...`);
         console.log(`🔍 totalInterviewTime: ${totalInterviewTime} seconds`);
         console.log(`🔍 isAuthenticated: ${isAuthenticated}, user: ${user?.email}`);
         
@@ -602,14 +796,14 @@ return false;
           console.log('⚠️ Skipping credit deduction - not authenticated');
         }
 
-        // Redirect to feedback page with session data
-        const sessionId = session?.id || 'unknown';
-        console.log(`🔄 Redirecting to feedback page with sessionId: ${sessionId}, duration: ${totalInterviewTime}`);
-        router.push(`/feedback?sessionId=${sessionId}&duration=${totalInterviewTime}`);
+        // Keep session as in-progress for resume (don't mark as completed)
+        console.log(`⏸️ Session kept as in-progress for resume`);
+        
+        // Redirect to dashboard
+        router.push('/dashboard');
         
       } catch (error) {
-        console.error('Error processing interview completion:', error);
-        // Fallback: redirect to dashboard
+        console.error('Error processing paused interview:', error);
         router.push('/dashboard');
       }
     }, 5000);
@@ -686,6 +880,11 @@ return;
       // Set the response text
       setGeminiResponse(data.text);
 
+      // Start the interview timer
+      setInterviewStarted(true);
+      setIsConnected(true);
+      console.log('🚀 Interview started - timer should begin');
+
       // Handle different response types
       if (data.audio) {
         if (data.audio === 'BROWSER_FALLBACK') {
@@ -707,6 +906,11 @@ return;
           console.log('🎤 Retell agent connection established!');
           setCurrentAudioUrl('retell_agent_connected');
           setGeminiResponse(data.text);
+          
+          // Start the interview timer for Retell sessions
+          setInterviewStarted(true);
+          setIsConnected(true);
+          console.log('🚀 Retell interview started - timer should begin');
           
           // Start Retell session timer (3 minutes)
           setIsRetellActive(true);
@@ -1249,23 +1453,54 @@ return;
             </div>
             <span className="text-sm text-gray-600">JasTalk AI Beta</span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-4">
+            {/* Credit Display */}
+            <div className="text-sm text-gray-600">
+              {subscriptionLoading ? (
+                <span className="text-gray-400">Loading...</span>
+              ) : subscription ? (
+                <span className="font-semibold text-blue-600">
+                  {subscription.interview_time_remaining || 0} min
+                </span>
+              ) : (
+                <span className="text-gray-400">Credits</span>
+              )}
+            </div>
+            {/* Connection Status */}
             <Badge variant={isConnected ? "default" : "secondary"}>
               {isConnected ? "Connected" : "Disconnected"}
             </Badge>
+            {/* Timer Display */}
             {interviewStarted && (
               <Badge variant="outline" className="text-orange-600">
                 ⏱️ {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')} used
               </Badge>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-red-600 hover:text-red-700"
-              onClick={handleEndInterview}
-            >
-              End Interview
-            </Button>
+            {/* Debug Timer State */}
+            <div className="text-xs text-gray-500">
+              Timer: {interviewStarted ? 'ON' : 'OFF'} | Connected: {isConnected ? 'YES' : 'NO'}
+            </div>
+            {/* Interview Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700"
+                onClick={handleFinishPractice}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Finish
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-blue-600 hover:text-blue-700"
+                onClick={handlePauseAndResume}
+              >
+                <Pause className="h-3 w-3 mr-1" />
+                Pause
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -1680,15 +1915,25 @@ return;
                           </div>
                         </div>
                         
-                        {/* End Interview Button */}
-                        <Button
-                          variant="destructive"
-                          className="w-full mt-4"
-                          onClick={handleEndInterview}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          End Interview
-                        </Button>
+                        {/* Interview Action Buttons */}
+                        <div className="flex gap-4 mt-4">
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={handleFinishPractice}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Finish Practice
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={handlePauseAndResume}
+                          >
+                            <Pause className="h-4 w-4 mr-2" />
+                            Pause & Resume Later
+                          </Button>
+                        </div>
                         
                         <div className="mt-2 text-xs text-gray-600">
                           <p>Agent ID: {geminiResponse ? 'Connected' : 'Connecting...'}</p>
@@ -1798,6 +2043,43 @@ return;
           </div>
         )}
       </div>
+      
+      {/* Pause Confirmation Modal */}
+      {showPauseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Pause className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Session Paused
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Your practice session has been paused. You can continue later from the Home page by clicking "Continue Practice".
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowPauseModal(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    setShowPauseModal(false);
+                    router.push('/dashboard');
+                  }}
+                >
+                  Go to Home
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -35,6 +35,9 @@ export default function PracticeSetupPage() {
   // Credit tracking state
   const [subscription, setSubscription] = useState<any>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  
+  // Timer display state
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Mock interviewer data (in a real app, this would come from an API)
   const availableInterviewers: Interviewer[] = [
@@ -86,6 +89,15 @@ export default function PracticeSetupPage() {
     const storedUserName = localStorage.getItem('userName') || 'User';
     setUserName(storedUserName);
   }, [searchParams]);
+
+  // Live clock timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch subscription data for credit display
   useEffect(() => {
@@ -195,7 +207,21 @@ export default function PracticeSetupPage() {
             </div>
             <span className="text-sm text-gray-600">JasTalk AI Beta</span>
           </div>
-          <div className="ml-auto">
+          <div className="ml-4">
+            <div className="text-sm text-gray-500 font-mono">
+              🕐 {currentTime.toLocaleTimeString()}
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-4">
+            {/* Credit Display */}
+            {subscription && (
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-blue-600">
+                  {subscription.interview_time_remaining || 0}
+                </span> min remaining
+              </div>
+            )}
+            {/* User Avatar */}
             <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
               <span className="text-gray-600 text-sm font-semibold">PL</span>
             </div>
@@ -216,6 +242,12 @@ export default function PracticeSetupPage() {
             You'll be interviewed by an AI agent using the questions generated from your document. 
             This is a voice-based interview - just like a real phone interview!
           </p>
+          {/* Interview Timer Info */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg max-w-md mx-auto">
+            <div className="text-sm text-blue-800">
+              <span className="font-semibold">⏱️ Interview Timer:</span> Credits will be deducted after the interview ends
+            </div>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mb-8">

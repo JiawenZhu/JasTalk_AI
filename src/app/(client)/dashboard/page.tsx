@@ -84,6 +84,57 @@ export default function Dashboard() {
     setConfirmOpen(false);
   };
 
+  // Function to handle reset and retry for completed sessions
+  const handleResetAndRetry = async (session: PracticeSession) => {
+    try {
+      console.log('🔄 Resetting and retrying session:', session.id);
+      
+      // First, get the original session data to extract questions
+      const sessionResponse = await fetch(`/api/practice-sessions/${session.id}`);
+      if (!sessionResponse.ok) {
+        throw new Error('Failed to fetch original session data');
+      }
+      
+      const sessionData = await sessionResponse.json();
+      const originalQuestions = sessionData.session.questions || [];
+      
+      console.log('📋 Original questions found:', originalQuestions.length);
+      
+      // Reset the session status to in-progress
+      await fetch('/api/practice-sessions', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          status: 'in-progress',
+          start_time: new Date().toISOString(),
+          end_time: null,
+          score: null,
+          duration: null,
+        }),
+      });
+      
+      console.log('✅ Session reset to in-progress');
+      
+      // Redirect to the continue page (same as Continue button)
+      router.push(`/practice/continue/${session.id}`);
+      
+      toast({
+        title: "Session Reset",
+        description: "Session has been reset! You can now retry the interview.",
+      });
+    } catch (error) {
+      console.error('❌ Error resetting session:', error);
+      toast({
+        title: "Reset Failed",
+        description: "Failed to reset session. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Helper function to safely get session display name
   const getSessionDisplayName = (session: PracticeSession) => {
     if (!session.type) {return 'AI Interviewer';}
@@ -576,12 +627,12 @@ return;
           </div>
         </div>
 
-        {/* Recent Practice Sessions */}
+        {/* Past Practice Sessions */}
         <div className="px-4 pb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Practice Sessions</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Past Practice Sessions</h3>
                 {!isSelecting ? (
                   <>
                     <div className="flex items-center space-x-2">
@@ -689,6 +740,14 @@ return;
                                 {new Date((session as any).endedAt || session.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             )}
+                            {/* Reset & Retry Button for Completed Sessions */}
+                            <button
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
+                              onClick={() => handleResetAndRetry(session)}
+                              title="Reset and retry this interview"
+                            >
+                              Reset & Retry
+                            </button>
                           </>
                         )}
                         <button

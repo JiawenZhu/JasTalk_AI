@@ -86,7 +86,7 @@ This document outlines the redesigned interface for the FoloUp application, tran
    - Action: Opens analytics
 
 #### Recent Activity Section
-- **Section Title**: "Recent Practice Sessions"
+- **Section Title**: "Past Practice Sessions"
 - **Session Cards**: Horizontal scrollable list
 - **Quick Stats**: Total sessions, average score, improvement trend
 

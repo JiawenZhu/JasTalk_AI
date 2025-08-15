@@ -620,9 +620,63 @@ function UploadContent() {
             }`}
           >
             {isProcessing ? (
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>Generating Questions...</span>
+              <div className="flex flex-col items-center space-y-3">
+                {/* CSS for the loading animations */}
+                <style>
+                  {`
+                    @keyframes loading-fill {
+                      0% { width: 0%; }
+                      100% { width: 100%; }
+                    }
+
+                    @keyframes character-run {
+                      0% { transform: translateX(0); }
+                      100% { transform: translateX(calc(100% - 28px)); }
+                    }
+
+                    @keyframes character-bounce {
+                      0%, 100% { transform: translateY(0); }
+                      50% { transform: translateY(-4px); }
+                    }
+                    
+                    .loading-fill-animation {
+                      animation: loading-fill 12s ease-in-out infinite;
+                    }
+
+                    .character-animation {
+                      animation: character-run 12s ease-in-out infinite,
+                                 character-bounce 0.3s ease-in-out infinite alternate;
+                    }
+                  `}
+                </style>
+                
+                <h3 className="text-lg font-semibold text-white">
+                  Generating questions...
+                </h3>
+                
+                {/* The loading bar container with a rounded gray track */}
+                <div className="relative w-full h-7 bg-gray-300 rounded-full overflow-hidden shadow-inner">
+                  
+                  {/* The animated fill that expands as the character runs */}
+                  <div
+                    className="absolute top-0 left-0 h-full bg-blue-500 rounded-full loading-fill-animation"
+                  ></div>
+                  
+                  {/* The running character SVG positioned over the fill bar */}
+                  <div className="absolute top-0 h-full flex items-center pl-1 character-animation">
+                    {/* SVG for the character */}
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Head */}
+                      <circle cx="14" cy="10" r="6" fill="#F0C2A6" />
+                      {/* Hair/Hat */}
+                      <path d="M9 7 L19 7 L21 10 L7 10 Z" fill="#607D8B" />
+                      {/* Jacket */}
+                      <rect x="8" y="16" width="12" height="12" fill="#53B0AE" />
+                      {/* Stripe on hat */}
+                      <rect x="8" y="8" width="12" height="1.5" fill="#E65D5E" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             ) : (
               `Generate ${questionCount} Interview Questions`

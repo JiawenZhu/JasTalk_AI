@@ -465,16 +465,22 @@ return; // Skip real client init
       setIsCallStarted(false);
       setIsCalling(false);
       setActiveTurn('user');
-      if (session?.id) {
+      
+      // Only mark as completed if interview was substantial or user explicitly ended
+      if (session?.id && totalInterviewTime > 120) { // 2 minutes threshold
+        console.log(`✅ Call ended with substantial time (${totalInterviewTime}s), marking as completed`);
         fetch(`/api/practice-sessions/${session.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'completed', end_time: new Date().toISOString(), finished_all_questions: true })
         }).catch(() => undefined);
+      } else {
+        console.log(`⏸️ Call ended with short time (${totalInterviewTime}s), keeping as in-progress`);
       }
+      
       toast({
         title: "Interview Ended",
-        description: "Your practice interview has been completed.",
+        description: "Your practice interview has been paused.",
       });
     });
 
