@@ -13,13 +13,63 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch real subscription data
-    const { data: subscription, error: subError } = await supabase
+    // Fetch all active subscriptions to aggregate total credits
+    const { data: subscriptions, error: subError } = await supabase
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active')
-      .single();
+      .eq('status', 'active');
+
+    if (subError && subError.code !== 'PGRST116') {
+      console.error('Error fetching subscriptions:', subError);
+      return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
+    }
+
+    // Aggregate credits from all active subscriptions
+    let totalMinutes = 0;
+    let totalMinutesTotal = 0;
+    let bestTier = 'free';
+    let primarySubscription = null;
+
+    if (subscriptions && subscriptions.length > 0) {
+      // Sum up all remaining minutes
+      totalMinutes = subscriptions.reduce((sum, sub) => sum + (sub.interview_time_remaining || 0), 0);
+      totalMinutesTotal = subscriptions.reduce((sum, sub) => sum + (sub.interview_time_total || 0), 0);
+      
+      // Determine best tier (pro > free)
+      bestTier = subscriptions.some(sub => sub.tier === 'pro') ? 'pro' : 'free';
+      
+      // Use the most recent pro subscription as primary, or the first one if no pro
+      primarySubscription = subscriptions
+        .filter(sub => sub.tier === bestTier)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || subscriptions[0];
+    }
+
+    console.log('🔍 User subscription API - Credit aggregation:', {
+      userId: user.id,
+      totalSubscriptions: subscriptions?.length || 0,
+      subscriptions: subscriptions?.map(s => ({ 
+        id: s.id, 
+        tier: s.tier, 
+        remaining: s.interview_time_remaining,
+        total: s.interview_time_total,
+        created: s.created_at
+      })),
+      aggregatedCredits: {
+        totalMinutes,
+        totalMinutesTotal,
+        bestTier,
+        primarySubscriptionId: primarySubscription?.id
+      }
+    });
+
+    // Create a unified subscription object with aggregated credits
+    const subscription = primarySubscription ? {
+      ...primarySubscription,
+      interview_time_remaining: totalMinutes,
+      interview_time_total: totalMinutesTotal,
+      tier: bestTier
+    } : null;
 
     if (subError && subError.code !== 'PGRST116') {
       console.error('Error fetching subscription:', subError);
@@ -49,8 +99,8 @@ export async function GET() {
         user_id: user.id,
         tier: 'free',
         status: 'active',
-        interview_time_remaining: 10, // 10 minutes for free users
-        interview_time_total: 10,
+        interview_time_remaining: 0, // No free credits by default
+        interview_time_total: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         expires_at: null
@@ -188,11 +238,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'add_welcome_credits') {
-      // Add welcome credits to new user
-      const { amount = 5.00 } = body;
+      // Add welcome minutes to new user
+      // All users get 42 minutes by default
+      const { minutes = 42 } = body;
       
-      // Convert dollars to minutes (at $0.12/minute rate)
-      const minutesToAdd = Math.round((amount / 0.12) * 100) / 100;
+      // Use minutes directly - no more rate conversion
+      const minutesToAdd = minutes;
       
       const { data: subscription, error: updateError } = await supabase
         .from('user_subscriptions')
@@ -207,22 +258,22 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (updateError) {
-        console.error('Error adding welcome credits:', updateError);
-        return NextResponse.json({ error: 'Failed to add welcome credits' }, { status: 500 });
+        console.error('Error adding welcome minutes:', updateError);
+        return NextResponse.json({ error: 'Failed to add welcome minutes' }, { status: 500 });
       }
 
       return NextResponse.json({ 
         subscription,
-        message: `Successfully added $${amount} in welcome credits (${minutesToAdd} minutes)`
+        message: `Successfully added ${minutesToAdd} welcome minutes`
       });
     }
 
     if (action === 'add_purchase_credits') {
-      // Manually add credits for a purchase (when webhook fails)
-      const { packageId, credits, amount } = body;
+      // Manually add minutes for a purchase (when webhook fails)
+      const { packageId, minutes } = body;
       
-      if (!packageId || !credits || !amount) {
-        return NextResponse.json({ error: 'Missing packageId, credits, or amount' }, { status: 400 });
+      if (!packageId || !minutes) {
+        return NextResponse.json({ error: 'Missing packageId or minutes' }, { status: 400 });
       }
       
       // Find the package to validate
@@ -252,13 +303,13 @@ export async function POST(request: NextRequest) {
 
       if (currentSubscription) {
         // Update existing subscription
-        const newCredits = currentSubscription.interview_time_remaining + parseInt(credits);
-        const newTotal = currentSubscription.interview_time_total + parseInt(credits);
+        const newMinutes = currentSubscription.interview_time_remaining + parseInt(minutes);
+        const newTotal = currentSubscription.interview_time_total + parseInt(minutes);
         
         const { error: updateError } = await supabase
           .from('user_subscriptions')
           .update({
-            interview_time_remaining: newCredits,
+            interview_time_remaining: newMinutes,
             interview_time_total: newTotal,
             updated_at: new Date().toISOString()
           })
@@ -270,8 +321,8 @@ export async function POST(request: NextRequest) {
         }
         
         return NextResponse.json({ 
-          subscription: { ...currentSubscription, interview_time_remaining: newCredits, interview_time_total: newTotal },
-          message: `Successfully added ${credits} credits to existing subscription`
+          subscription: { ...currentSubscription, interview_time_remaining: newMinutes, interview_time_total: newTotal },
+          message: `Successfully added ${minutes} minutes to existing subscription`
         });
       } else {
         // Create new subscription
@@ -281,8 +332,8 @@ export async function POST(request: NextRequest) {
             user_id: user.id,
             tier: 'pro',
             status: 'active',
-            interview_time_remaining: parseInt(credits),
-            interview_time_total: parseInt(credits),
+            interview_time_remaining: parseInt(minutes),
+            interview_time_total: parseInt(minutes),
           });
 
         if (createError) {
@@ -291,8 +342,74 @@ export async function POST(request: NextRequest) {
         }
         
         return NextResponse.json({ 
-          message: `Successfully created new subscription with ${credits} credits`
+          message: `Successfully created new subscription with ${minutes} minutes`
         });
+      }
+    }
+
+    if (action === 'deduct_minutes') {
+      // Deduct minutes from user's account
+      const { minutes } = body;
+      
+      if (!minutes || minutes <= 0) {
+        return NextResponse.json({ error: 'Invalid minutes amount' }, { status: 400 });
+      }
+      
+      // Try to get current subscription
+      let currentSubscription = null;
+      try {
+        const { data, error } = await supabase
+          .from('user_subscriptions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
+
+        if (!error && data) {
+          currentSubscription = data;
+        }
+      } catch (fetchError) {
+        console.log('No existing subscription found');
+      }
+
+      if (currentSubscription) {
+        // Check if user has enough minutes
+        if (currentSubscription.interview_time_remaining < minutes) {
+          return NextResponse.json({ 
+            error: 'Insufficient minutes',
+            available: currentSubscription.interview_time_remaining,
+            requested: minutes
+          }, { status: 400 });
+        }
+
+        // Update existing subscription
+        const newMinutes = currentSubscription.interview_time_remaining - minutes;
+        
+        const { error: updateError } = await supabase
+          .from('user_subscriptions')
+          .update({
+            interview_time_remaining: newMinutes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentSubscription.id);
+
+        if (updateError) {
+          console.error('Error deducting minutes:', updateError);
+          return NextResponse.json({ error: 'Failed to deduct minutes' }, { status: 500 });
+        }
+        
+        return NextResponse.json({ 
+          success: true,
+          message: `Successfully deducted ${minutes} minutes`,
+          remainingMinutes: newMinutes,
+          deductedMinutes: minutes
+        });
+      } else {
+        return NextResponse.json({ 
+          error: 'No active subscription found',
+          available: 0,
+          requested: minutes
+        }, { status: 400 });
       }
     }
 
