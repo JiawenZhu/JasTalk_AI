@@ -25,7 +25,6 @@ import PanelToggle from '@/components/interview/PanelToggle';
 import StartSpeakingButton from '@/components/StartSpeakingButton';
 import { useInterviewSession } from '@/hooks/use-interview-session';
 import { useInterviewPipeline } from '@/hooks/use-interview-pipeline';
-
 import { mapVoiceIdToGeminiVoice, getVoiceById, getVoiceStats } from '@/lib/voice-config';
 import { CreditValidation } from '@/components/ui/credit-validation';
 
@@ -125,11 +124,7 @@ function NewPracticePage() {
   const [lastAgentResponse, setLastAgentResponse] = useState<string>('');
   const [activeTurn, setActiveTurn] = useState<'user' | 'ai' | 'waiting' | null>(null);
   
-  // WebSocket state
   const [ws, setWs] = useState<WebSocket | null>(null);
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
-  const [isWebSocketConnecting, setIsWebSocketConnecting] = useState(false);
-  
   const audioPlayerRef = useRef<AudioPlayer | null>(null);
 
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -162,11 +157,6 @@ function NewPracticePage() {
   const [followUpQuestionsCount, setFollowUpQuestionsCount] = useState(0);
   const [questionState, setQuestionState] = useState<'waiting' | 'asking' | 'followup' | 'completed'>('waiting');
   
-  // WebSocket setup tracking
-  const [initialPromptSent, setInitialPromptSent] = useState(false);
-  const [hasSetupCompleted, setHasSetupCompleted] = useState(false);
-  const [questions, setQuestions] = useState<any[]>([]);
-  
   // Ensure state variables are always defined
   const safeFollowUpQuestionsCount = followUpQuestionsCount || 0;
   const safeCurrentOfficialQuestion = currentOfficialQuestion || 0;
@@ -196,8 +186,6 @@ function NewPracticePage() {
     isLoading: pipelineLoading,
     error: pipelineError
   } = useInterviewPipeline();
-
-
 
   // Helper function to log any pending AI response (defined after hooks)
   const logPendingAiResponse = useCallback(() => {
@@ -236,6 +224,7 @@ return prev;
   const resumeQuestionsAnswered = searchParams.get('questionsAnswered');
   const resumeNextQuestion = searchParams.get('nextQuestion');
   const [isResuming, setIsResuming] = useState(false);
+  const [resumeAttempted, setResumeAttempted] = useState(false);
   
   // Auto-save session progress when conversation changes
   useEffect(() => {
@@ -264,14 +253,16 @@ return prev;
 
   // Handle session resumption (new conversation log method)
   useEffect(() => {
-    if (resumeFromLog && !isResuming) {
+    if (resumeFromLog && !isResuming && !resumeAttempted) {
       setIsResuming(true);
+      setResumeAttempted(true);
       handleLogBasedResume();
-    } else if (resumeSessionKey && !isResuming && !currentSession) {
+    } else if (resumeSessionKey && !isResuming && !currentSession && !resumeAttempted) {
       setIsResuming(true);
+      setResumeAttempted(true);
       handleSessionResume(resumeSessionKey);
     }
-  }, [resumeFromLog, resumeSessionKey, isResuming, currentSession]);
+  }, [resumeFromLog, resumeSessionKey, isResuming, currentSession, resumeAttempted]);
 
   // Cleanup effect to stop credit tracking when component unmounts
   useEffect(() => {
@@ -281,6 +272,13 @@ return prev;
       console.log('💰 Stopped real-time credit tracking - component unmounted');
     };
   }, [stopInterviewTracking]);
+
+  // Reset resume flag when starting new interview
+  useEffect(() => {
+    if (isInterviewActive && !resumeFromLog && !resumeSessionKey) {
+      setResumeAttempted(false);
+    }
+  }, [isInterviewActive, resumeFromLog, resumeSessionKey]);
 
   // Silence detection effect for Start Speaking button
   useEffect(() => {
@@ -331,15 +329,16 @@ return () => clearInterval(interval);
       // Find the agent by ID
       const agentsResponse = await fetch('/api/voice-agents');
       if (agentsResponse.ok) {
-        const agents = await agentsResponse.json();
-        const agent = agents.find((a: any) => a.agent_id === resumeAgentId);
+        const agentsData = await agentsResponse.json();
+        const agents = agentsData.voice_agents || [];
+        const agent = agents.find((a: any) => a.id === resumeAgentId);
         
         if (agent) {
           dispatch(setSelectedInterviewer({
-            id: agent.agent_id,
-            displayName: agent.name,
-            voiceId: agent.voice_id || 'default',
-            languageCode: agent.language_code || 'en-US'
+            id: agent.id,
+            displayName: agent.displayName,
+            voiceId: agent.voiceId || 'default',
+            languageCode: agent.languageCode || 'en-US'
           } as VoiceAgent));
         }
       }
@@ -377,7 +376,8 @@ return () => clearInterval(interval);
         connectWebSocket(questions, voiceConfig);
       }
       
-      sonnerToast.success(`Interview resumed! Continuing from question ${resumeNextQuestion} of ${questions.length}`);
+      const agentName = currentAgent?.displayName || logData.agent_name || 'AI Interviewer';
+      sonnerToast.success(`Interview resumed! Continuing with ${agentName}. Starting from question ${resumeNextQuestion} of ${questions.length}`);
       
       console.log('✅ Interview resumed from conversation log', {
         agent: logData.agent_name,
@@ -467,7 +467,8 @@ return () => clearInterval(interval);
           connectWebSocket(questions, voiceConfig);
         }
 
-        sonnerToast.success(`Session resumed! Continuing from question ${currentQuestionIndex + 1} of ${questions?.length || 0}`);
+        const sessionAgentName = selectedAgent?.displayName || agentName || 'AI Interviewer';
+        sonnerToast.success(`Session resumed! Continuing with ${sessionAgentName}. Starting from question ${currentQuestionIndex + 1} of ${questions?.length || 0}`);
 
         console.log('✅ Session resumed successfully', {
           agent: agentName,
@@ -653,11 +654,13 @@ return () => clearInterval(interval);
       
       // Send voice configuration if provided
       if (voiceConfig) {
-        console.log('🎵 Sending voice config:', voiceConfig);
+        console.log('🎵 Sending voice config to WebSocket:', voiceConfig);
         newWs.send(JSON.stringify({
           type: 'voice_config',
           voiceConfig
         }));
+      } else {
+        console.warn('⚠️ No voice config provided to WebSocket');
       }
     };
 
@@ -917,27 +920,13 @@ return;
       voiceName: mapVoiceIdToGeminiVoice(selectedAgent.voiceId, selectedAgent.languageCode, selectedAgent.displayName)
     };
     
-    // Get detailed voice information for debugging
-    const selectedVoiceInfo = getVoiceById(voiceConfig.voiceName);
-    const voiceStats = getVoiceStats();
-    
-    console.log('🎵 Voice mapping decision:', {
+    console.log('🎵 Voice configuration for interview:', {
       agentName: selectedAgent.displayName,
-      voiceId: selectedAgent.voiceId,
+      agentId: selectedAgent.id,
+      originalVoiceId: selectedAgent.voiceId,
       languageCode: selectedAgent.languageCode,
-      mappedVoice: voiceConfig.voiceName,
-      voiceDetails: selectedVoiceInfo ? {
-        name: selectedVoiceInfo.name,
-        gender: selectedVoiceInfo.gender,
-        characteristics: selectedVoiceInfo.characteristics,
-        description: selectedVoiceInfo.description
-      } : 'Voice not found in configuration',
-      systemStats: {
-        totalVoices: voiceStats.total,
-        activeVoices: voiceStats.active,
-        genderDistribution: voiceStats.byGender
-      },
-      finalConfig: voiceConfig
+      mappedVoiceName: voiceConfig.voiceName,
+      finalVoiceConfig: voiceConfig
     });
 
       // Create NEW conversation pipeline interview

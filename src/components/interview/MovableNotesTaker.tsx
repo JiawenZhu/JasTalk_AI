@@ -27,7 +27,7 @@ const MovableNotesTaker: React.FC<MovableNotesTakerProps> = ({
   const [isMinimized, setIsMinimized] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [expansionLevel, setExpansionLevel] = useState(0); // 0: 0.75x, 1: 1x, 2: 1.5x, 3: 2x, 4: 0.75x
+  const [expansionLevel, setExpansionLevel] = useState(0); // 0: 0.75x, 1: 1x, 2: 1.5x, 3: 2x, 4: 3x
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Handle drag
@@ -70,7 +70,7 @@ const MovableNotesTaker: React.FC<MovableNotesTakerProps> = ({
       { width: baseWidth * 1, height: baseHeight * 1 },       // 1x
       { width: baseWidth * 1.5, height: baseHeight * 1.5 },   // 1.5x
       { width: baseWidth * 2, height: baseHeight * 2 },       // 2x
-      { width: baseWidth * 0.75, height: baseHeight * 0.75 }  // 0.75x (cycle back)
+      { width: baseWidth * 3, height: baseHeight * 3 }        // 3x
     ];
     
     const nextLevel = (expansionLevel + 1) % expansionLevels.length;
@@ -79,7 +79,7 @@ const MovableNotesTaker: React.FC<MovableNotesTakerProps> = ({
     setExpansionLevel(nextLevel);
     setSize(newSize);
     
-    const levelNames = ['0.75x', '1x', '1.5x', '2x', '0.75x'];
+    const levelNames = ['0.75x', '1x', '1.5x', '2x', '3x'];
     console.log(`📝 Notes Panel expanded to ${levelNames[nextLevel]}:`, newSize);
     console.log(`📝 Current size state:`, size);
   };
@@ -256,7 +256,11 @@ const MovableNotesTaker: React.FC<MovableNotesTakerProps> = ({
             
             <div className="h-full flex flex-col">
               {/* Notes Editor */}
-              <div className="flex-1 p-4">
+              <div 
+                className="flex-1 p-4 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors"
+                onDoubleClick={handleDoubleClick}
+                title="Double-click to expand 3x"
+              >
                 <div className="mb-4">
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Take notes during your interview:

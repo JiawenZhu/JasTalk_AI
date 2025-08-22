@@ -38,7 +38,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
-  const [expansionLevel, setExpansionLevel] = useState(0); // 0: 0.75x, 1: 1x, 2: 1.5x, 3: 2x, 4: 0.75x
+  const [expansionLevel, setExpansionLevel] = useState(0); // 0: 0.75x, 1: 1x, 2: 1.5x, 3: 2x, 4: 3x
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
@@ -93,7 +93,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
       { width: baseWidth * 1, height: baseHeight * 1 },       // 1x
       { width: baseWidth * 1.5, height: baseHeight * 1.5 },   // 1.5x
       { width: baseWidth * 2, height: baseHeight * 2 },       // 2x
-      { width: baseWidth * 0.75, height: baseHeight * 0.75 }  // 0.75x (cycle back)
+      { width: baseWidth * 3, height: baseHeight * 3 }        // 3x
     ];
     
     const nextLevel = (expansionLevel + 1) % expansionLevels.length;
@@ -102,7 +102,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
     setExpansionLevel(nextLevel);
     setSize(newSize);
     
-    const levelNames = ['0.75x', '1x', '1.5x', '2x', '0.75x'];
+    const levelNames = ['0.75x', '1x', '1.5x', '2x', '3x'];
     console.log(`📏 Questions Panel expanded to ${levelNames[nextLevel]}:`, newSize);
     console.log(`📏 Current size state:`, size);
   };
@@ -110,7 +110,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
   // Handle double-click on header to reset size
   const handleHeaderDoubleClick = () => {
     setSize({ width: 600, height: 600 }); // 0.75x width, 1x height for better vertical space
-    setExpansionLevel(0); // Reset to 0.75x expansion level
+    setExpansionLevel(0); // Reset to initial expansion level
     console.log('📏 Questions Panel reset to 0.75x width, 1x height');
   };
 
@@ -240,7 +240,9 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
             <div className="h-full flex flex-col">
               {/* Header with Progress */}
               <div 
-                className="p-3 border-b bg-gray-50 dark:bg-gray-800"
+                className="p-3 border-b bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onDoubleClick={handleDoubleClick}
+                title="Double-click to expand 3x"
               >
                 <div className="space-y-2">
                   {/* Official Question Progress */}
@@ -338,7 +340,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
                     const finalTransform = transform ? `${transform} ${scrollTransform}` : scrollTransform;
                     
                     return (
-                      <div
+                      <motion.div
                         key={question.id}
                         className={`p-2 rounded-md border cursor-pointer transition-all duration-150 ${
                           index === safeCurrentQuestionIndex
@@ -399,7 +401,7 @@ const MovableQuestionsPanel: React.FC<MovableQuestionsPanelProps> = ({
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
