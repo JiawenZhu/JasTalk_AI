@@ -10,8 +10,7 @@ const publicRoutes = [
   '/jastalk-landing',
   '/coding-demo',
   '/voice-demo',
-  '/practice/setup',
-  '/practice/interview',
+
   '/practice/complete',
   '/api/register-call',
   '/api/register-practice-call',

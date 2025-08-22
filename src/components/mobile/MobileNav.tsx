@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Home, Users, Shield, CreditCard } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import CreditsDisplay from "@/components/CreditsDisplay";
 
 const items = [
   { href: "/dashboard", label: "Home", Icon: Home },
@@ -18,8 +19,6 @@ export default function MobileNav() {
   const router = useRouter();
   const [isScrollingUp, setIsScrollingUp] = useState(false);
   const [lastScrollY, setLastScrollY] = useState(0);
-  const [subscription, setSubscription] = useState<any>(null);
-
   // Scroll detection for transparency effects
   useEffect(() => {
     const handleScroll = () => {
@@ -37,12 +36,6 @@ export default function MobileNav() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
-
-  // Fetch subscription data
-  useEffect(() => {
-    // Temporarily disable subscription fetching to prevent infinite loop
-    // Will re-enable once the database schema is properly set up
-  }, []);
 
   return (
     <nav className={`
@@ -68,25 +61,10 @@ export default function MobileNav() {
         ${isScrollingUp ? 'bg-indigo-400/60' : 'bg-gray-400/40'}
       `} />
       
-      {/* Credit Balance Indicator */}
-      {subscription && (
-        <div className="px-4 py-2 border-b border-gray-200 bg-gray-50/80">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center space-x-1">
-              <CreditCard className="w-3 h-3 text-blue-600" />
-              <span className="text-gray-600">Credits:</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <span className="font-semibold text-green-600">
-                ${subscription.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}
-              </span>
-              <span className="text-gray-500">
-                {subscription.interview_time_remaining || 0}m
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Credit Balance Indicator - Using new CreditsDisplay component */}
+      <div className="px-4 py-2 border-b border-gray-200 bg-gray-50/80">
+        <CreditsDisplay variant="compact" className="text-xs" />
+      </div>
       
       <ul className="flex items-center justify-around py-2">
         {items.map(({ href, label, Icon }) => {

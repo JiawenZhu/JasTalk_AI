@@ -39,6 +39,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
+import { CreditValidation } from '@/components/ui/credit-validation';
+import GeneratingQuestionsModal from '@/components/GeneratingQuestionsModal';
+import UploadGuideTour from '@/components/UploadGuideTour';
+
 
 interface UploadedFile {
   id: string;
@@ -59,13 +63,14 @@ function UploadContent() {
   );
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [textContent, setTextContent] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [questionCount, setQuestionCount] = useState(10);
   const [showQuestionConfig, setShowQuestionConfig] = useState(false);
   const [showMoreTemplates, setShowMoreTemplates] = useState(false);
   const [interviewDifficulty, setInterviewDifficulty] = useState('medium');
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [showGeneratingModal, setShowGeneratingModal] = useState(false);
+  const [showGuideTour, setShowGuideTour] = useState(false);
 
   // Enhanced template descriptions with 25-30 words
   const templateDescriptions = {
@@ -101,6 +106,17 @@ function UploadContent() {
       textareaRef.current.focus();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    // Check if this is the user's first time on the upload page
+    const hasSeenUploadGuide = localStorage.getItem('hasSeenUploadGuide');
+    if (!hasSeenUploadGuide) {
+      // Show the guide tour after a short delay
+      setTimeout(() => {
+        setShowGuideTour(true);
+      }, 1000);
+    }
+  }, []);
 
   const handleFileUpload = (files: FileList | null) => {
     if (!files) return;
@@ -170,8 +186,10 @@ function UploadContent() {
 
   const handleGenerateQuestions = async () => {
     if (!canGenerateQuestions) return;
+
+    // Show the modal instead of setting isProcessing
+    setShowGeneratingModal(true);
     
-    setIsProcessing(true);
     try {
       const response = await fetch('/api/generate-questions', {
         method: 'POST',
@@ -188,43 +206,77 @@ function UploadContent() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
         console.log('Questions generated:', data);
-
+      
         // Persist generated questions locally for the practice flow
         try {
-          localStorage.setItem('generatedQuestions', JSON.stringify(data.questions));
-          localStorage.setItem('questionConfig', JSON.stringify({
-            questionCount,
-            interviewType: 'mixed',
+      localStorage.setItem('generatedQuestions', JSON.stringify(data.questions));
+      localStorage.setItem('questionConfig', JSON.stringify({
+        questionCount,
+        interviewType: 'mixed',
             difficulty: interviewDifficulty,
-            focusAreas: ['programming', 'problem-solving', 'system-design']
-          }));
+        focusAreas: ['programming', 'problem-solving', 'system-design']
+      }));
         } catch {}
 
-        // Navigate to the practice page (practice/new reads from localStorage)
-        router.push(`/practice/new?difficulty=${interviewDifficulty}`);
+        // The modal will handle the redirect after completion
       } else {
         const errorData = await response.json();
-        toast({
-          title: "Error",
-          description: errorData.error || "Failed to generate questions. Please try again.",
-          variant: "destructive",
-        });
+        
+        // Hide modal on error
+        setShowGeneratingModal(false);
+        
+        if (response.status === 402) {
+          // Insufficient credits error
+          toast({
+            title: "Insufficient Credits",
+            description: "You don't have enough credits to generate questions. Please add credits to continue.",
+            variant: "destructive",
+          });
+          // Redirect to premium page to add credits
+          setTimeout(() => {
+            router.push('/premium?insufficient-credits=true');
+          }, 2000);
+        } else {
+          toast({
+            title: "Error",
+            description: errorData.error || "Failed to generate questions. Please try again.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error('Error generating questions:', error);
+      // Hide modal on error
+      setShowGeneratingModal(false);
       toast({
         title: "Error",
         description: "An error occurred while generating questions. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
   const canGenerateQuestions = uploadedFiles.length > 0 || textContent.trim().length > 0;
+
+  const handleModalComplete = () => {
+    setShowGeneratingModal(false);
+    // Navigate to the practice page after modal completes
+    router.push(`/practice/new?difficulty=${interviewDifficulty}`);
+  };
+
+  const handleGuideTourComplete = () => {
+    setShowGuideTour(false);
+    // Mark that the user has seen the guide
+    localStorage.setItem('hasSeenUploadGuide', 'true');
+  };
+
+  const handleGuideTourClose = () => {
+    setShowGuideTour(false);
+    // Mark that the user has seen the guide
+    localStorage.setItem('hasSeenUploadGuide', 'true');
+  };
 
   // Remove authentication check - allow free users to access
   // if (!isAuthenticated) {
@@ -239,453 +291,415 @@ function UploadContent() {
   // }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <style jsx>{sliderStyles}</style>
-      {/* Mobile Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.back()}
-            className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
-          >
-            <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">Upload Document</h1>
-          <div className="w-9"></div> {/* Spacer for centering */}
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <CreditValidation action="create-questions">
+            <div className="text-center mb-12">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                Upload Your Job Description
+              </h1>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Get personalized interview questions based on your job description. 
+                Our AI will analyze the requirements and generate relevant questions to help you prepare.
+              </p>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white border-b relative overflow-hidden">
-        <div className="flex relative">
-          {/* Liquid Glass Background for Active Tab */}
-          <motion.div
-            className="absolute inset-0 bg-white/20 backdrop-blur-md border-b-2 border-blue-500/30 rounded-t-lg"
-            initial={false}
-            animate={{
-              x: activeTab === 'camera' ? 0 : activeTab === 'file' ? '33.33%' : '66.66%',
-              width: '33.33%'
-            }}
-            transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 30
-            }}
-          />
-          
+            {/* Mode Selection */}
+            <div id="mode-selection" className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <button
-            onClick={() => setActiveTab('camera')}
-            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-all duration-300 relative z-10 ${
-              activeTab === 'camera'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <CameraIcon className="w-5 h-5 mx-auto mb-1" />
-            Camera
+                  onClick={() => setActiveTab('text')}
+                  className={`flex-1 py-4 px-6 rounded-xl text-lg font-semibold transition-all duration-300 ${
+                    activeTab === 'text'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  📝 Text Input
           </button>
           <button
             onClick={() => setActiveTab('file')}
-            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-all duration-300 relative z-10 ${
+                  className={`flex-1 py-4 px-6 rounded-xl text-lg font-semibold transition-all duration-300 ${
               activeTab === 'file'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <PhotoIcon className="w-5 h-5 mx-auto mb-1" />
-            Files
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  📄 File Upload
+                </button>
+              </div>
+
+                            {/* Text Input Mode */}
+              {activeTab === 'text' && (
+                <div className="space-y-6">
+                  <div id="job-description">
+                    <label className="block text-lg font-semibold text-gray-800 mb-3">
+                      Job Description
+                    </label>
+                    <textarea
+                      ref={textareaRef}
+                      value={textContent}
+                      onChange={(e) => setTextContent(e.target.value)}
+                      placeholder="Paste your job description here... Include requirements, responsibilities, and any specific skills or experience needed."
+                      className="w-full h-48 p-4 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:ring-100 transition-all duration-300 resize-none"
+                    />
+                  </div>
+
+                  <div id="question-config" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-3">
+                        Number of Questions
+                      </label>
+                      <select
+                        value={questionCount}
+                        onChange={(e) => setQuestionCount(Number(e.target.value))}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-700 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300"
+                      >
+                        <option value={5}>5 Questions</option>
+                        <option value={10}>10 Questions</option>
+                        <option value={15}>15 Questions</option>
+                        <option value={20}>20 Questions</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-3">
+                        Interview Type
+                      </label>
+                      <select
+                        value={interviewDifficulty}
+                        onChange={(e) => setInterviewDifficulty(e.target.value)}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-700 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300"
+                      >
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Quick Templates Section */}
+                  <div id="quick-templates" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-800">Quick Templates</h3>
+                      <button
+                        onClick={() => setShowMoreTemplates(!showMoreTemplates)}
+                        className="text-blue-600 text-sm font-medium hover:text-blue-700 transition-colors"
+                      >
+                        {showMoreTemplates ? 'Show Less' : 'Show More'}
           </button>
+                    </div>
+                    
+                    {/* Initial 4 Templates */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {['Software Engineer', 'Product Manager', 'Data Scientist', 'UX Designer'].map((template) => (
           <button
-            onClick={() => setActiveTab('text')}
-            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-all duration-300 relative z-10 ${
-              activeTab === 'text'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <DocumentTextIcon className="w-5 h-5 mx-auto mb-1" />
-            Text
+                          key={template}
+                          onClick={() => {
+                            setTextContent(templateDescriptions[template as keyof typeof templateDescriptions] || '');
+                            setSelectedTemplate(template);
+                          }}
+                          className={`p-4 text-left border-2 rounded-xl transition-all duration-200 ${
+                            selectedTemplate === template
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="font-semibold text-sm">{template}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {template === 'Software Engineer' && 'Full-stack development, algorithms, system design'}
+                            {template === 'Product Manager' && 'Product strategy, user research, roadmap planning'}
+                            {template === 'Data Scientist' && 'Machine learning, statistical analysis, data modeling'}
+                            {template === 'UX Designer' && 'User research, wireframing, prototyping'}
+                          </div>
           </button>
-        </div>
+                      ))}
       </div>
 
-      <div className="p-4">
-        {/* Camera Tab */}
-        {activeTab === 'camera' && (
-          <div className="space-y-4">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Take a Photo
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Capture job descriptions, documents, or any text you want to practice with
-              </p>
+                    {/* Additional Templates (Hidden by default) */}
+                    {showMoreTemplates && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-3"
+                      >
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            'Marketing Manager', 'Sales Representative', 'HR Specialist', 'Financial Analyst',
+                            'DevOps Engineer', 'Frontend Developer', 'Backend Developer', 'Mobile Developer',
+                            'QA Engineer', 'Business Analyst', 'Project Manager', 'UI Designer'
+                          ].map((template) => (
+                            <button
+                              key={template}
+                              onClick={() => {
+                                setTextContent(templateDescriptions[template as keyof typeof templateDescriptions] || '');
+                                setSelectedTemplate(template);
+                              }}
+                              className={`p-3 text-left border-2 rounded-lg transition-all duration-200 ${
+                                selectedTemplate === template
+                                  ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="font-semibold text-sm">{template}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {template === 'Marketing Manager' && 'Digital marketing, brand strategy, campaign management'}
+                                {template === 'Sales Representative' && 'Lead generation, client relationships, sales techniques'}
+                                {template === 'HR Specialist' && 'Recruitment, employee relations, HR policies'}
+                                {template === 'Financial Analyst' && 'Financial modeling, budgeting, investment analysis'}
+                                {template === 'DevOps Engineer' && 'CI/CD, cloud infrastructure, automation'}
+                                {template === 'Frontend Developer' && 'React, Vue, responsive design, user experience'}
+                                {template === 'Backend Developer' && 'Node.js, databases, API development, scalability'}
+                                {template === 'Mobile Developer' && 'iOS, Android, cross-platform development'}
+                                {template === 'QA Engineer' && 'Testing strategies, automation, quality assurance'}
+                                {template === 'Business Analyst' && 'Requirements gathering, process improvement, stakeholder management'}
+                                {template === 'Project Manager' && 'Agile methodologies, team leadership, risk management'}
+                                {template === 'UI Designer' && 'Visual design, design systems, user interface'}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
             </div>
 
             <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => cameraInputRef.current?.click()}
-              className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl shadow-lg flex items-center justify-center space-x-3"
-            >
-              <CameraIcon className="w-6 h-6" />
-              <span className="font-semibold">Open Camera</span>
+                    id="generate-button"
+                    onClick={handleGenerateQuestions}
+                    disabled={!canGenerateQuestions}
+                    className={`w-full py-4 px-8 rounded-xl text-xl font-bold text-white transition-all duration-300 ${
+                      canGenerateQuestions
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transform hover:-translate-y-1'
+                        : 'bg-gray-400 cursor-not-allowed'
+                    }`}
+                    whileHover={!canGenerateQuestions ? {} : { scale: 1.02 }}
+                    whileTap={!canGenerateQuestions ? {} : { scale: 0.98 }}
+                  >
+                    Generate {questionCount} Interview Questions
             </motion.button>
-
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleCameraCapture}
-              className="hidden"
-            />
           </div>
         )}
 
-        {/* File Tab */}
+              {/* File Upload Mode */}
         {activeTab === 'file' && (
-          <div className="space-y-4">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Upload Files
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Upload PDFs, Word docs, or any file with job descriptions
-              </p>
-            </div>
-
+                <div className="space-y-6">
+                  <div id="job-description">
+                    <label className="block text-lg font-semibold text-gray-800 mb-3">
+                      Upload Job Description File
+                    </label>
             <div
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                dragActive
-                  ? 'border-blue-400 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              <CloudArrowUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 mb-2">
-                Drag and drop files here, or{' '}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  browse files
-                </button>
-              </p>
-              <p className="text-sm text-gray-500">
-                Supports PDF, Word, Excel, PowerPoint, and text files
-              </p>
-            </div>
-
+                      className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors duration-300"
+                    >
             <input
               ref={fileInputRef}
               type="file"
-              multiple
-              accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.html"
+                        accept=".pdf,.doc,.docx,.txt"
               onChange={handleFileSelect}
               className="hidden"
-            />
+                        id="file-upload"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className="cursor-pointer block"
+                      >
+                        <div className="text-6xl mb-4">📄</div>
+                        <p className="text-lg text-gray-600 mb-2">
+                          Click to upload or drag and drop
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          PDF, DOC, DOCX, or TXT files accepted
+                        </p>
+                      </label>
+                    </div>
+                    {uploadedFiles.length > 0 && (
+                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-green-800">
+                          ✅ File uploaded: {uploadedFiles.map(f => f.name).join(', ')}
+                        </p>
           </div>
         )}
-
-        {/* Text Tab */}
-        {activeTab === 'text' && (
-          <div className="space-y-4">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Paste Job Description
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Copy and paste job descriptions from Indeed, LinkedIn, or any source
-              </p>
             </div>
 
-            <div className="space-y-3">
-              <textarea
-                ref={textareaRef}
-                value={textContent}
-                onChange={(e) => setTextContent(e.target.value)}
-                placeholder="Paste your job description here...&#10;&#10;Example:&#10;We are looking for a Software Engineer to join our team. The ideal candidate will have experience with React, Node.js, and cloud technologies..."
-                className="w-full h-48 p-4 border border-gray-300 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              
-              <div className="flex justify-between text-sm text-gray-500">
-                <span>{textContent.length} characters</span>
-                <span>{textContent.split(/\s+/).filter(word => word.length > 0).length} words</span>
+                  <div id="question-config" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-3">
+                        Number of Questions
+                      </label>
+                      <select
+                        value={questionCount}
+                        onChange={(e) => setQuestionCount(Number(e.target.value))}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-700 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-300"
+                      >
+                        <option value={5}>5 Questions</option>
+                        <option value={10}>10 Questions</option>
+                        <option value={15}>15 Questions</option>
+                        <option value={20}>20 Questions</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-3">
+                        Interview Type
+                      </label>
+                      <select
+                        value={interviewDifficulty}
+                        onChange={(e) => setInterviewDifficulty(e.target.value)}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-700 focus:border-blue-500 focus:ring-blue-100 transition-all duration-300"
+                      >
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                      </select>
               </div>
             </div>
 
-            {/* Quick Templates */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-gray-900">Quick Templates</h3>
-                <button
-                  onClick={() => setShowMoreTemplates(!showMoreTemplates)}
-                  className="text-blue-600 text-sm font-medium hover:text-blue-700"
-                >
-                  {showMoreTemplates ? 'Show Less' : 'Show More'}
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
+                  {/* Quick Templates Section for File Upload */}
+                  <div id="quick-templates" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-800">Quick Templates</h3>
+                      <button
+                        onClick={() => setShowMoreTemplates(!showMoreTemplates)}
+                        className="text-blue-600 text-sm font-medium hover:text-blue-700 transition-colors"
+                      >
+                        {showMoreTemplates ? 'Show Less' : 'Show More'}
+                      </button>
+                    </div>
+                    
+                    {/* Initial 4 Templates */}
+                    <div className="grid grid-cols-2 gap-3">
                 {['Software Engineer', 'Product Manager', 'Data Scientist', 'UX Designer'].map((template) => (
                   <button
                     key={template}
-                    onClick={() => {
-                      setTextContent(templateDescriptions[template as keyof typeof templateDescriptions]);
-                      setSelectedTemplate(template);
-                    }}
-                    className={`p-3 text-sm border rounded-lg text-left transition-colors ${
-                      selectedTemplate === template
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {template}
+                          onClick={() => {
+                            setTextContent(templateDescriptions[template as keyof typeof templateDescriptions] || '');
+                            setSelectedTemplate(template);
+                          }}
+                          className={`p-4 text-left border-2 rounded-xl transition-all duration-200 ${
+                            selectedTemplate === template
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="font-semibold text-sm">{template}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {template === 'Software Engineer' && 'Full-stack development, algorithms, system design'}
+                            {template === 'Product Manager' && 'Product strategy, user research, roadmap planning'}
+                            {template === 'Data Scientist' && 'Machine learning, statistical analysis, data modeling'}
+                            {template === 'UX Designer' && 'User research, wireframing, prototyping'}
+                          </div>
                   </button>
                 ))}
               </div>
-              
-              {/* More Templates */}
-              {showMoreTemplates && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="space-y-3"
-                >
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Marketing Manager', 'Sales Representative', 'HR Specialist', 'Financial Analyst', 'DevOps Engineer', 'Frontend Developer', 'Backend Developer', 'Mobile Developer', 'QA Engineer', 'Business Analyst', 'Project Manager', 'UI Designer'].map((template) => (
-                      <button
-                        key={template}
-                        onClick={() => {
-                          setTextContent(templateDescriptions[template as keyof typeof templateDescriptions]);
-                          setSelectedTemplate(template);
-                        }}
-                        className={`p-3 text-sm border rounded-lg text-left transition-colors ${
-                          selectedTemplate === template
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        {template}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Interview Difficulty Selection */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900 text-lg">Interview Difficulty</h3>
-              <div className="grid grid-cols-1 gap-3">
-                {[
-                  { level: 'Easy', description: 'Basic concepts, entry-level questions, fundamental knowledge testing, suitable for beginners and recent graduates.' },
-                  { level: 'Medium', description: 'Standard industry questions, practical scenarios, moderate complexity, ideal for mid-level professionals with 2-5 years experience.' },
-                  { level: 'Hard', description: 'Advanced problem-solving, complex scenarios, senior-level challenges, designed for experienced professionals and leadership roles.' }
-                ].map(({ level, description }) => (
-                  <button
-                    key={level}
-                    onClick={() => setInterviewDifficulty(level.toLowerCase())}
-                    className={`p-4 text-left border-2 rounded-xl transition-all duration-200 ${
-                      interviewDifficulty === level.toLowerCase()
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="font-bold text-lg">{level}</div>
-                      {interviewDifficulty === level.toLowerCase() && (
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600 leading-relaxed">{description}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Uploaded Files */}
-        {uploadedFiles.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="font-medium text-gray-900">Uploaded Files</h3>
-            {uploadedFiles.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
-              >
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  {file.preview ? (
-                    <img
-                      src={file.preview}
-                      alt={file.name}
-                      className="w-10 h-10 object-cover rounded"
-                    />
-                  ) : (
-                    <DocumentTextIcon className="w-10 h-10 text-gray-400" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {formatFileSize(file.size)}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeFile(file.id)}
-                  className="p-1 text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Question Configuration */}
-        {canGenerateQuestions && (
-          <div className="pt-4">
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-gray-900">Question Settings</h3>
-                <button
-                  onClick={() => setShowQuestionConfig(!showQuestionConfig)}
-                  className="text-blue-600 text-sm font-medium"
-                >
-                  {showQuestionConfig ? 'Hide' : 'Customize'}
-                </button>
-              </div>
-              
-              {showQuestionConfig && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="space-y-4"
-                >
-                  {/* Question Count */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of Questions: {questionCount}
-                    </label>
-                    <input
-                      type="range"
-                      min="5"
-                      max="20"
-                      value={questionCount}
-                      onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>5</span>
-                      <span>10</span>
-                      <span>15</span>
-                      <span>20</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm text-gray-600">
-                    <p>• Questions will be generated based on your job description</p>
-                    <p>• Mix of technical, behavioral, and system design questions</p>
-                    <p>• Difficulty level: Medium (can be adjusted on next page)</p>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Generate Questions Button */}
-        <div className="pt-6">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={handleGenerateQuestions}
-            disabled={!canGenerateQuestions || isProcessing}
-            className={`w-full py-4 px-6 rounded-xl font-semibold transition-all ${
-              canGenerateQuestions && !isProcessing
-                ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {isProcessing ? (
-              <div className="flex flex-col items-center space-y-3">
-                {/* CSS for the loading animations */}
-                <style>
-                  {`
-                    @keyframes loading-fill {
-                      0% { width: 0%; }
-                      100% { width: 100%; }
-                    }
-
-                    @keyframes character-run {
-                      0% { transform: translateX(0); }
-                      100% { transform: translateX(calc(100% - 28px)); }
-                    }
-
-                    @keyframes character-bounce {
-                      0%, 100% { transform: translateY(0); }
-                      50% { transform: translateY(-4px); }
-                    }
                     
-                    .loading-fill-animation {
-                      animation: loading-fill 12s ease-in-out infinite;
-                    }
-
-                    .character-animation {
-                      animation: character-run 12s ease-in-out infinite,
-                                 character-bounce 0.3s ease-in-out infinite alternate;
-                    }
-                  `}
-                </style>
-                
-                <h3 className="text-lg font-semibold text-white">
-                  Generating questions...
-                </h3>
-                
-                {/* The loading bar container with a rounded gray track */}
-                <div className="relative w-full h-7 bg-gray-300 rounded-full overflow-hidden shadow-inner">
-                  
-                  {/* The animated fill that expands as the character runs */}
-                  <div
-                    className="absolute top-0 left-0 h-full bg-blue-500 rounded-full loading-fill-animation"
-                  ></div>
-                  
-                  {/* The running character SVG positioned over the fill bar */}
-                  <div className="absolute top-0 h-full flex items-center pl-1 character-animation">
-                    {/* SVG for the character */}
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      {/* Head */}
-                      <circle cx="14" cy="10" r="6" fill="#F0C2A6" />
-                      {/* Hair/Hat */}
-                      <path d="M9 7 L19 7 L21 10 L7 10 Z" fill="#607D8B" />
-                      {/* Jacket */}
-                      <rect x="8" y="16" width="12" height="12" fill="#53B0AE" />
-                      {/* Stripe on hat */}
-                      <rect x="8" y="8" width="12" height="1.5" fill="#E65D5E" />
-                    </svg>
+                    {/* Additional Templates (Hidden by default) */}
+                    {showMoreTemplates && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                        className="space-y-3"
+                      >
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            'Marketing Manager', 'Sales Representative', 'HR Specialist', 'Financial Analyst',
+                            'DevOps Engineer', 'Frontend Developer', 'Backend Developer', 'Mobile Developer',
+                            'QA Engineer', 'Business Analyst', 'Project Manager', 'UI Designer'
+                          ].map((template) => (
+                            <button
+                              key={template}
+                              onClick={() => {
+                                setTextContent(templateDescriptions[template as keyof typeof templateDescriptions] || '');
+                                setSelectedTemplate(template);
+                              }}
+                              className={`p-3 text-left border-2 rounded-lg transition-all duration-200 ${
+                                selectedTemplate === template
+                                  ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="font-semibold text-sm">{template}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {template === 'Marketing Manager' && 'Digital marketing, brand strategy, campaign management'}
+                                {template === 'Sales Representative' && 'Lead generation, client relationships, sales techniques'}
+                                {template === 'HR Specialist' && 'Recruitment, employee relations, HR policies'}
+                                {template === 'Financial Analyst' && 'Financial modeling, budgeting, investment analysis'}
+                                {template === 'DevOps Engineer' && 'CI/CD, cloud infrastructure, automation'}
+                                {template === 'Frontend Developer' && 'React, Vue, responsive design, user experience'}
+                                {template === 'Backend Developer' && 'Node.js, databases, API development, scalability'}
+                                {template === 'Mobile Developer' && 'iOS, Android, cross-platform development'}
+                                {template === 'QA Engineer' && 'Testing strategies, automation, quality assurance'}
+                                {template === 'Business Analyst' && 'Requirements gathering, process improvement, stakeholder management'}
+                                {template === 'Project Manager' && 'Agile methodologies, team leadership, risk management'}
+                                {template === 'UI Designer' && 'Visual design, design systems, user interface'}
+                              </div>
+                            </button>
+                          ))}
+                    </div>
+                      </motion.div>
+                    )}
                   </div>
-                </div>
+                  
+                  <motion.button
+                    id="generate-button"
+                    onClick={handleGenerateQuestions}
+                    disabled={!canGenerateQuestions}
+                    className={`w-full py-4 px-8 rounded-xl text-xl font-bold text-white transition-all duration-300 ${
+                      canGenerateQuestions
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transform hover:-translate-y-1'
+                        : 'bg-gray-400 cursor-not-allowed'
+                    }`}
+                    whileHover={!canGenerateQuestions ? {} : { scale: 1.02 }}
+                    whileTap={!canGenerateQuestions ? {} : { scale: 0.98 }}
+                  >
+                    Generate {questionCount} Questions from File
+                  </motion.button>
+                  </div>
+              )}
+            </div>
+
+            {/* Features Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl p-6 shadow-lg text-center">
+                <div className="text-4xl mb-4">🎯</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Targeted Questions</h3>
+                <p className="text-gray-600">Questions specifically tailored to your job requirements</p>
               </div>
-            ) : (
-              `Generate ${questionCount} Interview Questions`
-            )}
-          </motion.button>
+              <div className="bg-white rounded-xl p-6 shadow-lg text-center">
+                <div className="text-4xl mb-4">⚡</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Instant Generation</h3>
+                <p className="text-gray-600">Get your questions in seconds, not hours</p>
+          </div>
+              <div className="bg-white rounded-xl p-6 shadow-lg text-center">
+                <div className="text-4xl mb-4">🎭</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Multiple Formats</h3>
+                <p className="text-gray-600">Behavioral, technical, and general questions</p>
+              </div>
+            </div>
+          </CreditValidation>
         </div>
       </div>
+
+      {/* Generating Questions Modal */}
+      <GeneratingQuestionsModal
+        isVisible={showGeneratingModal}
+        questionCount={questionCount}
+        onComplete={handleModalComplete}
+      />
+
+      {/* Upload Guide Tour */}
+      <UploadGuideTour
+        isVisible={showGuideTour}
+        onComplete={handleGuideTourComplete}
+        onClose={handleGuideTourClose}
+      />
     </div>
   );
-}
+} 
 
 export default UploadContent;

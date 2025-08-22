@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { 
   ArrowLeftIcon,
@@ -17,13 +17,16 @@ import { useDispatch } from 'react-redux';
 import { setSelectedInterviewer } from '@/store/interviewerSlice';
 
 interface VoiceAgent {
-  agent_id: string;
+  id: string;
   name: string;
-  description: string;
-  voice_id: string;
-  category: string;
-  difficulty: string;
-  specialties: string[];
+  displayName: string;
+  voiceId: string;
+  languageCode: string;
+  personalityType: string;
+  specializations: string[];
+  voiceDescription: string;
+  avatarUrl?: string;
+  isPremium: boolean;
 }
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +36,7 @@ export default function InterviewersPage() {
   const router = useRouter();
   const { interviewers, interviewersLoading } = useInterviewers();
   const [contentReady, setContentReady] = useState(false);
-  const [retellAgents, setRetellAgents] = useState<VoiceAgent[]>([]);
+  const [voiceAgents, setVoiceAgents] = useState<VoiceAgent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const dispatch = useDispatch();
 
@@ -41,23 +44,21 @@ export default function InterviewersPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/sign-in');
-      
-return;
+      return;
     }
 
     if (!interviewersLoading) {
       const timer = setTimeout(() => {
         setContentReady(true);
       }, 100);
-      
-return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, router, interviewersLoading]);
 
-  // Load Retell agents on component mount
+  // Load voice agents on component mount
   useEffect(() => {
     if (isAuthenticated) {
-      loadRetellAgents();
+      loadVoiceAgents();
     }
   }, [isAuthenticated]);
 
@@ -67,37 +68,29 @@ return () => clearTimeout(timer);
     if (storedAgent) {
       try {
         const agent = JSON.parse(storedAgent);
-        setSelectedAgentId(agent.agent_id);
+        setSelectedAgentId(agent.id);
       } catch (error) {
         console.error('Error parsing stored dashboard agent:', error);
       }
     }
   }, []);
 
-  const loadRetellAgents = async () => {
+  const loadVoiceAgents = async () => {
     try {
       setAgentsLoading(true);
-      const response = await fetch('/api/get-retell-agents');
+      console.log('Loading voice agents...');
+      const response = await fetch('/api/voice-agents');
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (data.success) {
-        // Client-side safety de-duplication in case server didn't filter, or if future changes re-introduce duplicates.
-        const seen = new Set<string>();
-        const uniqueAgents = (data.agents as VoiceAgent[]).filter((a: any) => {
-          const agentType = (a.agent_type || a.category || 'unknown').toString().toLowerCase();
-          const key = `${(a.name || '').toLowerCase().trim()}|${agentType}|${(a.voice_id || 'default-voice').toLowerCase()}`;
-          if (seen.has(key)) {
-            return false;
-          }
-          seen.add(key);
-
-          return true;
-        });
-
-        setRetellAgents(uniqueAgents);
-        console.log('Retell agents loaded:', data.agents.length);
+        setVoiceAgents(data.voice_agents);
+        console.log('Voice agents loaded:', data.voice_agents.length);
       } else {
-        console.error('Failed to load Retell agents:', data.error);
+        console.error('Failed to load voice agents:', data.error);
         toast({
           title: "Error",
           description: "Failed to load voice agents.",
@@ -105,7 +98,7 @@ return () => clearTimeout(timer);
         });
       }
     } catch (error) {
-      console.error('Error loading Retell agents:', error);
+      console.error('Error loading voice agents:', error);
       toast({
         title: "Error",
         description: "Failed to load voice agents.",
@@ -118,10 +111,10 @@ return () => clearTimeout(timer);
 
   const handleSyncAgents = async () => {
     try {
-      await loadRetellAgents();
+      await loadVoiceAgents();
       toast({
         title: "Agents Synced",
-        description: "Updated your interviewers from Retell AI.",
+        description: "Updated your voice agents list.",
       });
     } catch (error) {
       toast({
@@ -133,9 +126,12 @@ return () => clearTimeout(timer);
   };
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const [speedControl, setSpeedControl] = useState(1.0);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const handleSelectInterviewer = (agent: VoiceAgent) => {
-    setSelectedAgentId(agent.agent_id);
+    setSelectedAgentId(agent.id);
     
     // Store the selected agent in localStorage for the dashboard
     localStorage.setItem('selectedDashboardAgent', JSON.stringify(agent));
@@ -144,23 +140,85 @@ return () => clearTimeout(timer);
     
     toast({
       title: "Interviewer Selected",
-      description: `You've selected ${agent.name} for your dashboard.`,
+      description: `You've selected ${agent.displayName} for your dashboard.`,
     });
   };
 
-  const handlePreviewVoice = (agent: VoiceAgent) => {
-    // Store the selected agent in localStorage for the practice session
-    localStorage.setItem('selectedPracticeAgent', JSON.stringify(agent));
-    // Sync to Redux
-    dispatch(setSelectedInterviewer(agent));
+  const handlePreviewVoice = async (agent: VoiceAgent) => {
+    if (previewingVoice === agent.id) return;
     
-    toast({
-      title: "Voice Preview",
-      description: `Starting voice preview with ${agent.name}.`,
-    });
+    try {
+      setPreviewingVoice(agent.id);
+      
+      const response = await fetch('/api/voice-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voiceId: agent.voiceId,
+          speed: speedControl,
+          language: agent.languageCode || 'en-US'
+        })
+      });
 
-    // Navigate to practice page
-    router.push('/practice/new');
+      if (!response.ok) {
+        throw new Error('Failed to generate preview');
+      }
+
+      const data = await response.json();
+      
+      // Play the audio preview
+      await playAudioPreview(data.audioUrl);
+      
+      toast({
+        title: "Voice Preview",
+        description: `Playing voice preview for ${agent.displayName}.`,
+      });
+      
+    } catch (error) {
+      console.error('Voice preview error:', error);
+      toast({
+        title: "Preview Error",
+        description: "Could not generate voice preview. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPreviewingVoice(null);
+    }
+  };
+
+  const playAudioPreview = async (audioUrl: string) => {
+    try {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+
+      const response = await fetch(audioUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      if (arrayBuffer.byteLength % 2 !== 0) {
+        console.error("PCM data has an odd byte length and cannot be played:", arrayBuffer.byteLength);
+        return;
+      }
+
+      const pcm16 = new Int16Array(arrayBuffer);
+      const audioBuffer = audioContextRef.current.createBuffer(1, pcm16.length, 24000);
+      const channelData = audioBuffer.getChannelData(0);
+      
+      for (let i = 0; i < pcm16.length; i++) {
+        channelData[i] = pcm16[i] / 32768.0;
+      }
+
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.start();
+      
+      return new Promise(resolve => {
+        source.onended = resolve;
+      });
+    } catch (error) {
+      console.error('Error playing audio preview:', error);
+    }
   };
 
   function InterviewersLoader() {
@@ -206,7 +264,7 @@ return () => clearTimeout(timer);
           <div className="text-center">
             <h1 className="text-lg font-semibold text-gray-900">Interviewers</h1>
             <p className="text-sm text-gray-500">
-              {agentsLoading ? 0 : retellAgents.length} AI Interviewers Available
+              {agentsLoading ? 0 : voiceAgents.length} AI Interviewers Available
             </p>
           </div>
           <button
@@ -239,7 +297,7 @@ return () => clearTimeout(timer);
           
           <div className="grid grid-cols-2 gap-4 text-center">
             <div className="bg-white/10 rounded-lg p-3">
-              <div className="text-2xl font-bold">{agentsLoading ? 0 : retellAgents.length}</div>
+              <div className="text-2xl font-bold">{agentsLoading ? 0 : voiceAgents.length}</div>
               <div className="text-xs text-blue-100">Available</div>
             </div>
             <div className="bg-white/10 rounded-lg p-3">
@@ -249,11 +307,39 @@ return () => clearTimeout(timer);
           </div>
         </motion.div>
 
-        {/* Quick Actions */}
+        {/* Speed Control */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: contentReady ? 1 : 0, y: contentReady ? 0 : 20 }}
           transition={{ delay: 0.1 }}
+          className="bg-white rounded-xl p-4 shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">Voice Speed:</span>
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.25"
+              value={speedControl}
+              onChange={(e) => setSpeedControl(parseFloat(e.target.value))}
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+            <span className="text-sm text-gray-600 min-w-[60px]">
+              {speedControl === 0.5 ? '0.5x' : 
+               speedControl === 0.75 ? '0.75x' : 
+               speedControl === 1.0 ? '1.0x' : 
+               speedControl === 1.25 ? '1.25x' : 
+               speedControl === 1.5 ? '1.5x' : '2.0x'}
+            </span>
+          </div>
+        </motion.div>
+
+        {/* Quick Actions */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: contentReady ? 1 : 0, y: contentReady ? 0 : 20 }}
+          transition={{ delay: 0.15 }}
           className="grid grid-cols-2 gap-3"
         >
           <motion.button
@@ -291,13 +377,13 @@ return () => clearTimeout(timer);
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">Available Interviewers</h3>
             <span className="text-sm text-gray-500">
-              {agentsLoading ? 0 : retellAgents.length} of {agentsLoading ? 0 : retellAgents.length}
+              {agentsLoading ? 0 : voiceAgents.length} of {agentsLoading ? 0 : voiceAgents.length}
             </span>
           </div>
 
           {agentsLoading ? (
             <InterviewersLoader />
-          ) : retellAgents.length === 0 ? (
+          ) : voiceAgents.length === 0 ? (
             <div className="bg-white rounded-xl p-8 text-center shadow-sm border border-gray-200">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <UserGroupIcon className="w-8 h-8 text-gray-400" />
@@ -306,7 +392,7 @@ return () => clearTimeout(timer);
                 No Voice Interviewers Yet
               </h3>
               <p className="text-gray-600 mb-6">
-                Get started by syncing your AI interviewers from Retell AI
+                Get started by syncing your AI interviewers
               </p>
               <button
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
@@ -317,9 +403,9 @@ return () => clearTimeout(timer);
             </div>
           ) : (
             <div className="space-y-3">
-              {retellAgents.map((agent, index) => (
+              {voiceAgents.map((agent, index) => (
                 <motion.div
-                  key={agent.agent_id}
+                  key={agent.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * index }}
@@ -333,15 +419,17 @@ return () => clearTimeout(timer);
                         </span>
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{agent.name}</h3>
-                        <p className="text-sm text-gray-600">{agent.description}</p>
+                        <h3 className="font-semibold text-gray-900">{agent.displayName}</h3>
+                        <p className="text-sm text-gray-600">{agent.voiceDescription}</p>
                         <div className="flex items-center space-x-2 mt-1">
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                            {agent.category}
+                            {agent.personalityType}
                           </span>
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                            {agent.difficulty}
-                          </span>
+                          {agent.isPremium && (
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                              Premium
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -349,19 +437,36 @@ return () => clearTimeout(timer);
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <button
                       className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        selectedAgentId === agent.agent_id
+                        selectedAgentId === agent.id
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       onClick={() => handleSelectInterviewer(agent)}
                     >
-                      {selectedAgentId === agent.agent_id ? 'Selected' : 'Select'}
+                      {selectedAgentId === agent.id ? 'Selected' : 'Select'}
                     </button>
                     <button
-                      className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center space-x-2 ${
+                        previewingVoice === agent.id
+                          ? 'bg-blue-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
                       onClick={() => handlePreviewVoice(agent)}
+                      disabled={previewingVoice === agent.id}
                     >
-                      Open Last Interview
+                      {previewingVoice === agent.id ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Playing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Preview Voice</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </motion.div>

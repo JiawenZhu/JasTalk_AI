@@ -1,4 +1,4 @@
-// Credit packages configuration
+// Credit packages configuration (legacy - kept for backward compatibility)
 export const CREDIT_PACKAGES = [
   {
     id: 'starter',
@@ -42,12 +42,32 @@ export const CREDIT_PACKAGES = [
   },
 ];
 
-// Convert dollars to minutes (based on $0.12/minute rate)
-export const dollarsToMinutes = (dollars: number): number => {
-  return Math.round((dollars / 0.12) * 100) / 100;
+// New simplified credit packs (matching the premium page)
+// 🎯 Minutes = Full Access to All Features (No tier restrictions)
+export const SIMPLIFIED_CREDIT_PACKS = {
+  'starter-pack': {
+    id: 'starter-pack',
+    name: 'Starter Pack',
+    price: 15,
+    interviews: 5,
+    minutesPerInterview: 30,
+    totalMinutes: 150,
+    description: 'Perfect for last-minute practice - Full access to all features',
+    minutes: 150, // 5 interviews × 30 minutes each
+    features: ['All 20+ Premium AI Voices', 'Detailed Performance Analysis', 'Full Interview Logs']
+  },
+  'pro-pack': {
+    id: 'pro-pack',
+    name: 'Pro Pack',
+    price: 40,
+    interviews: 15,
+    minutesPerInterview: 45,
+    totalMinutes: 675,
+    description: 'Best value for ongoing practice - Full access to all features',
+    minutes: 675, // 15 interviews × 45 minutes each
+    features: ['All 20+ Premium AI Voices', 'Detailed Performance Analysis', 'Full Interview Logs', 'Priority Support']
+  }
 };
 
-// Convert minutes to dollars
-export const minutesToDollars = (minutes: number): number => {
-  return Math.round(minutes * 0.12 * 100) / 100;
-};
+// Note: Credits are now purely minutes-based
+// No more dollar conversion - users buy minutes directly

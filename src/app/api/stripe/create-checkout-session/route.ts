@@ -2,20 +2,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe, getCurrentStripeMode, getStripeConfig } from '@/lib/stripe';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { CREDIT_PACKAGES, dollarsToMinutes } from '@/lib/credit-packages';
+import { CREDIT_PACKAGES, SIMPLIFIED_CREDIT_PACKS } from '@/lib/credit-packages';
 
 export async function POST(request: NextRequest) {
   try {
     const { packageId } = await request.json();
     
-    // Validate package ID
-    const selectedPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+    // Check if it's a new simplified pack or legacy pack
+    let selectedPackage;
+    
+    if (SIMPLIFIED_CREDIT_PACKS[packageId as keyof typeof SIMPLIFIED_CREDIT_PACKS]) {
+      selectedPackage = SIMPLIFIED_CREDIT_PACKS[packageId as keyof typeof SIMPLIFIED_CREDIT_PACKS];
+    } else {
+      // Fallback to legacy packages for backward compatibility
+      selectedPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+    }
+    
     if (!selectedPackage) {
       return NextResponse.json(
         { error: 'Invalid package selected' },
         { status: 400 }
       );
     }
+
+    // Helper function to get minutes from package (handles both new and legacy formats)
+    const getPackageMinutes = (pkg: any): number => {
+      if ('minutes' in pkg) return pkg.minutes;
+      if ('credits' in pkg) return pkg.credits;
+      return 0;
+    };
+
+    const packageMinutes = getPackageMinutes(selectedPackage);
 
     // Get authenticated user
     const supabase = createRouteHandlerClient({ cookies });
@@ -48,7 +65,7 @@ export async function POST(request: NextRequest) {
               description: selectedPackage.description,
               metadata: {
                 packageId: selectedPackage.id,
-                credits: selectedPackage.credits.toString(),
+                minutes: packageMinutes.toString(),
                 userId: user.id,
               },
             },
@@ -63,7 +80,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         userId: user.id,
         packageId: selectedPackage.id,
-        credits: selectedPackage.credits.toString(),
+        minutes: packageMinutes.toString(),
         amount: selectedPackage.price.toString(),
         stripeMode: stripeMode.mode,
       },
@@ -76,7 +93,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             userId: user.id,
             packageId: selectedPackage.id,
-            credits: selectedPackage.credits.toString(),
+            minutes: packageMinutes.toString(),
           },
         },
       },

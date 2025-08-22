@@ -1,58 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentStripeMode, getStripeConfig } from '@/lib/stripe';
+import { createAdminClient } from '@/lib/supabase';
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    console.log('🧪 Testing webhook configuration...');
+    const { userId, credits, type } = await request.json();
     
-    // Get current Stripe mode
-    const stripeMode = getCurrentStripeMode();
-    console.log('🧪 Stripe mode:', stripeMode);
+    if (!userId || !credits) {
+      return NextResponse.json({ error: 'Missing userId or credits' }, { status: 400 });
+    }
     
-    // Get Stripe config
-    const config = getStripeConfig();
-    console.log('🧪 Stripe config:', {
-      hasSecretKey: !!config.secretKey,
-      hasPublishableKey: !!config.publishableKey,
-      hasWebhookSecret: !!config.webhookSecret,
-      baseUrl: config.baseUrl,
-      secretKeyPrefix: config.secretKey ? config.secretKey.substring(0, 20) + '...' : 'undefined',
-      publishableKeyPrefix: config.publishableKey ? config.publishableKey.substring(0, 20) + '...' : 'undefined',
-      webhookSecretPrefix: config.webhookSecret ? config.webhookSecret.substring(0, 20) + '...' : 'undefined',
-    });
+    const supabase = createAdminClient();
     
-    // Check environment variables
-    const envVars = {
-      NODE_ENV: process.env.NODE_ENV,
-      STRIPE_MODE: process.env.STRIPE_MODE,
-      STRIPE_SECRET_KEY_TEST: process.env.STRIPE_SECRET_KEY_TEST ? 'Set' : 'Not Set',
-      STRIPE_SECRET_KEY_LIVE: process.env.STRIPE_SECRET_KEY_LIVE ? 'Set' : 'Not Set',
-      STRIPE_WEBHOOK_SECRET_TEST: process.env.STRIPE_WEBHOOK_SECRET_TEST ? 'Set' : 'Not Set',
-      STRIPE_WEBHOOK_SECRET_LIVE: process.env.STRIPE_WEBHOOK_SECRET_LIVE ? 'Set' : 'Not Set',
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST ? 'Set' : 'Not Set',
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE ? 'Set' : 'Not Set',
-    };
+    // Check if user already has a subscription
+    const { data: existingSubscription } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
     
-    console.log('🧪 Environment variables:', envVars);
+    if (existingSubscription) {
+      // Update existing subscription
+      const newCredits = existingSubscription.interview_time_remaining + parseInt(credits);
+      const newTotal = existingSubscription.interview_time_total + parseInt(credits);
+      
+      console.log(`Test: Updating subscription for user ${userId}:`, {
+        oldCredits: existingSubscription.interview_time_remaining,
+        newCredits: newCredits,
+        addedCredits: parseInt(credits)
+      });
+      
+      const { error: updateError } = await supabase
+        .from('user_subscriptions')
+        .update({
+          interview_time_remaining: newCredits,
+          interview_time_total: newTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingSubscription.id);
+        
+      if (updateError) {
+        console.error('Test: Error updating subscription:', updateError);
+        return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+      }
+    } else {
+      // Create new subscription
+      console.log(`Test: Creating new subscription for user ${userId}: ${credits} credits`);
+      
+      const { error: createError } = await supabase
+        .from('user_subscriptions')
+        .insert({
+          user_id: userId,
+          tier: 'pro',
+          status: 'active',
+          interview_time_remaining: parseInt(credits),
+          interview_time_total: parseInt(credits),
+        });
+        
+      if (createError) {
+        console.error('Test: Error creating subscription:', createError);
+        return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
+      }
+    }
     
-    return NextResponse.json({
-      success: true,
-      stripeMode,
-      config: {
-        hasSecretKey: !!config.secretKey,
-        hasPublishableKey: !!config.publishableKey,
-        hasWebhookSecret: !!config.webhookSecret,
-        baseUrl: config.baseUrl,
-      },
-      environment: envVars,
-      timestamp: new Date().toISOString(),
+    console.log(`Test: ✅ Successfully added ${credits} credits to user ${userId}`);
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: `Added ${credits} credits to user ${userId}`,
+      creditsAdded: parseInt(credits)
     });
     
   } catch (error) {
-    console.error('🧪 Error testing webhook configuration:', error);
-    return NextResponse.json(
-      { error: 'Failed to test webhook configuration', details: error },
-      { status: 500 }
-    );
+    console.error('Test: Error processing test webhook:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

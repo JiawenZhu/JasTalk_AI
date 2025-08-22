@@ -32,6 +32,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!user && !!session;
 
+  // Handle welcome credits for new users
+  const handleNewUserWelcomeCredits = async (user: User) => {
+    try {
+      // Check if user already has a subscription (to avoid adding credits multiple times)
+      const response = await fetch('/api/user-subscription', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // If user already has credits, they're not a new user
+        if (data.subscription && data.subscription.interview_time_remaining > 0) {
+          console.log('User already has credits, skipping welcome credits');
+          return;
+        }
+      }
+
+      // Add welcome minutes for new user
+      console.log('Adding welcome minutes for new user:', user.email);
+      const creditResponse = await fetch('/api/user-subscription', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'add_welcome_credits',
+          minutes: 42 // 42 minutes instead of $5.00
+        }),
+      });
+
+      if (creditResponse.ok) {
+        console.log('✅ Welcome credits added successfully for new user');
+      } else {
+        console.error('❌ Failed to add welcome credits:', await creditResponse.text());
+      }
+    } catch (error) {
+      console.error('Error adding welcome credits:', error);
+    }
+  };
+
+  // Track if welcome credits have been checked for this session
+  const [welcomeCreditsChecked, setWelcomeCreditsChecked] = React.useState(false);
+
   // Initialize auth state
   const initializeAuth = useCallback(async () => {
     try {
@@ -102,6 +145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         switch (event) {
           case 'SIGNED_IN':
             console.log('User signed in:', session?.user?.email);
+            // Check if this is a new user and add welcome credits (only once per session)
+            if (session?.user && !welcomeCreditsChecked) {
+              setWelcomeCreditsChecked(true);
+              handleNewUserWelcomeCredits(session.user);
+            }
             break;
           case 'SIGNED_OUT':
             console.log('User signed out');
@@ -147,7 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signIn = async (data: SignInData): Promise<AuthResponse> => {
-    const result = await authService.signIn(data);
+    // Use retry mechanism for better rate limit handling
+    const result = await authService.signInWithRetry(data);
     if (result.success) {
       // Update local state immediately
       const { session: currentSession, user: currentUser } = result.data;

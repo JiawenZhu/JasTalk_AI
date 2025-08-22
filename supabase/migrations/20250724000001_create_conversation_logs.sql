@@ -35,12 +35,15 @@ CREATE TRIGGER update_conversation_logs_updated_at
 ALTER TABLE conversation_logs ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies
+DROP POLICY IF EXISTS "Users can view their own conversation logs" ON conversation_logs;
 CREATE POLICY "Users can view their own conversation logs" ON conversation_logs
   FOR SELECT USING (candidate_name = current_user);
 
+DROP POLICY IF EXISTS "Users can insert their own conversation logs" ON conversation_logs;
 CREATE POLICY "Users can insert their own conversation logs" ON conversation_logs
   FOR INSERT WITH CHECK (candidate_name = current_user);
 
+DROP POLICY IF EXISTS "Users can update their own conversation logs" ON conversation_logs;
 CREATE POLICY "Users can update their own conversation logs" ON conversation_logs
   FOR UPDATE USING (candidate_name = current_user);
 

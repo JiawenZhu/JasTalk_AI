@@ -25,7 +25,7 @@ import {
   SpeakerWaveIcon,
   PauseIcon
 } from '@heroicons/react/24/outline';
-import EmailCaptureModal from '@/components/marketing/EmailCaptureModal';
+
 
 export default function JasTalkLandingPage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
@@ -110,9 +110,7 @@ export default function JasTalkLandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Email capture modal */}
-      {/* Shows after 15s on first visit */}
-      <EmailCaptureModal />
+
       {/* Navigation */}
       <nav className={`fixed top-0 w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -167,7 +165,7 @@ export default function JasTalkLandingPage() {
             </h1>
             <p className={`text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed transition-all duration-700 delay-400 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               Practice with intelligent AI interviewers, get real-time feedback, and land your dream job with confidence. 
-              Start with $10 free credits.
+              Start with $5 free credits (42 minutes).
             </p>
             <div className={`flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 transition-all duration-700 delay-600 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               <Link href="/sign-up?offer=free-credit" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-4 rounded-lg text-lg font-semibold flex items-center gap-2 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl">
@@ -775,7 +773,7 @@ export default function JasTalkLandingPage() {
               Transparent Pay-as-You-Go Pricing
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              No monthly fees. Pay only for what you use. Start with $10 free credits.
+              No monthly fees. Pay only for what you use. Start with $5 free credits (42 minutes).
             </p>
           </div>
 
@@ -783,9 +781,9 @@ export default function JasTalkLandingPage() {
           <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-8 rounded-xl mb-12 text-center max-w-4xl mx-auto shadow-lg">
             <div className="flex items-center justify-center gap-3 mb-3">
               <CurrencyDollarIcon className="w-8 h-8" />
-              <h3 className="text-3xl font-bold">$10 Free Credits</h3>
+              <h3 className="text-3xl font-bold">$5 Free Credits</h3>
             </div>
-            <p className="text-green-100 text-lg">New users get $10 free credits to try JasTalk AI</p>
+            <p className="text-green-100 text-lg">New users get $5 free credits (42 minutes) to try JasTalk AI</p>
           </div>
 
           {/* Pricing Components */}

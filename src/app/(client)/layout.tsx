@@ -27,7 +27,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     hideOnboardingModal 
   } = useOnboarding();
 
-  const isAuthPage = pathname.includes("/sign-in") || pathname.includes("/sign-up");
+  const isAuthPage = pathname.includes("/sign-in") || pathname.includes("/sign-up") || pathname.includes("/forgot-password");
   const isLoading = !isAuthPage && authLoading;
 
   useEffect(() => {
@@ -59,12 +59,14 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     <div className="navigation-layer min-h-screen bg-[#F7F9FC]">
       <Navbar />
       <div className="flex flex-row h-screen">
-        <div className="hidden sm:block">
-          <SideMenu />
-        </div>
+        {!isAuthPage && (
+          <div className="hidden sm:block">
+            <SideMenu />
+          </div>
+        )}
         
         {/* Content area - simplified without problematic transitions */}
-        <div className="pt-[64px] h-full overflow-y-auto flex-grow sm:ml-[200px] navigation-offset">
+        <div className={`pt-[64px] h-full overflow-y-auto flex-grow ${!isAuthPage ? 'sm:ml-[200px]' : ''} navigation-offset`}>
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />

@@ -171,8 +171,7 @@ JasTalk AI is a cutting-edge interview practice platform that revolutionizes how
 ## 📱 Key Components
 
 ### Interview Flow
-- **Practice Setup** (`/practice/setup`) - Configure interview parameters
-- **Interview Active** (`/practice/interview`) - Main interview interface
+- **Practice New** (`/practice/new`) - Start new interview sessions
 - **Continue Practice** (`/practice/continue/[sessionId]`) - Resume paused sessions
 - **Feedback** (`/feedback`) - Rate and provide feedback
 

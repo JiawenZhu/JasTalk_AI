@@ -97,29 +97,6 @@ export default function SignUpPage() {
         });
 
       if (result.success) {
-        // Add $5 free credits to the new user's account
-        try {
-          const creditResponse = await fetch('/api/user-subscription', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'add_welcome_credits',
-              amount: 5.00
-            }),
-          });
-          
-          if (creditResponse.ok) {
-            setSuccess('Account created successfully! You\'ve been given $5 in free credits. Please check your email to confirm your account.');
-          } else {
-            setSuccess('Account created successfully! Please check your email to confirm your account.');
-          }
-        } catch (creditError) {
-          console.error('Error adding welcome credits:', creditError);
-          setSuccess('Account created successfully! Please check your email to confirm your account.');
-        }
-        
         // Clear form
         setFormData({
           firstName: '',
@@ -128,6 +105,8 @@ export default function SignUpPage() {
           password: '',
           confirmPassword: ''
         });
+        
+        setSuccess('Account created successfully! Please check your email to confirm your account. You\'ll receive $5 in free credits once you confirm your email and sign in.');
       } else {
         setError(result.error || 'Sign up failed');
       }

@@ -4,6 +4,9 @@ import React, { useEffect, useState } from "react";
 import { PlayCircle, Users, Settings, Home, UserPlus, CreditCard } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth.context";
+import Link from "next/link";
+import { HomeIcon, ChartBarIcon } from "@heroicons/react/24/outline";
+import CreditsDisplay from "@/components/CreditsDisplay";
 
 function SideMenu() {
   const pathname = usePathname();
@@ -11,71 +14,13 @@ function SideMenu() {
   const { isAuthenticated } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
-  const [subscription, setSubscription] = useState<any>(null);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
-
-  // Fetch subscription data
-  const fetchSubscription = async () => {
-    if (!isAuthenticated) {
-      setSubscription(null);
-      return;
-    }
-
-    try {
-      setSubscriptionLoading(true);
-      const response = await fetch('/api/user-subscription');
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSubscription(data.subscription);
-      }
-    } catch (error) {
-      console.error('Error fetching subscription in sideMenu:', error);
-    } finally {
-      setSubscriptionLoading(false);
-    }
-  };
+  // Credit display now handled by CreditsDisplay component
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch subscription when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchSubscription();
-    } else {
-      setSubscription(null);
-    }
-  }, [isAuthenticated]);
-
-  // Listen for credits updates from interview page
-  useEffect(() => {
-    const handleCreditsUpdated = () => {
-      console.log('🔄 SideMenu: Credits updated, refreshing subscription data...');
-      fetchSubscription();
-    };
-
-    window.addEventListener('credits-updated', handleCreditsUpdated);
-    
-    return () => {
-      window.removeEventListener('credits-updated', handleCreditsUpdated);
-    };
-  }, []);
-
-  // Listen for payment success
-  useEffect(() => {
-    const handlePaymentSuccess = () => {
-      console.log('🔄 SideMenu: Payment successful, refreshing subscription data...');
-      fetchSubscription();
-    };
-
-    window.addEventListener('payment-success', handlePaymentSuccess);
-    
-    return () => {
-      window.removeEventListener('payment-success', handlePaymentSuccess);
-    };
-  }, []);
+  // Credit updates now handled by CreditsDisplay component
 
   const handleNavigation = (path: string) => {
     if (pathname === path) {return;}
@@ -132,6 +77,7 @@ function SideMenu() {
                 />
                 <span className="font-medium">Interviews</span>
               </button>
+              
               <button
                 className={`flex flex-row items-center p-3 rounded-md hover:bg-slate-200 cursor-pointer transition-all duration-200 text-left w-full ${
                   pathname.endsWith("/interviewers")
@@ -188,50 +134,28 @@ function SideMenu() {
               </button>
               
               {/* Billing Section */}
-              <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="flex items-center space-x-2 mb-3">
-                  <CreditCard className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-gray-900">Billing</span>
+              <div className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm">
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900">Account Credits</span>
                 </div>
                 
-                {/* Credit Balance */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-600">Credits</span>
-                    <span className="text-sm font-bold text-green-600">
-                      {subscriptionLoading ? (
-                        <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
-                      ) : (
-                        `$${subscription?.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}`
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-600">Time</span>
-                    <span className="text-xs text-gray-700">
-                      {subscriptionLoading ? (
-                        <div className="w-8 h-3 bg-gray-200 rounded animate-pulse" />
-                      ) : (
-                        `${subscription?.interview_time_remaining || 0} min`
-                      )}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Rate Info */}
-                <div className="text-xs text-gray-600 mb-3">
-                  <div className="flex justify-between">
-                    <span>Rate:</span>
-                    <span className="font-medium">$0.12/min</span>
-                  </div>
+                {/* Credit Balance - Clean Design */}
+                <div className="mb-4">
+                  <CreditsDisplay variant="detailed" className="w-full" />
                 </div>
                 
                 {/* Buy Credits Button */}
                 <button
                   onClick={() => router.push('/premium')}
-                  className="w-full bg-blue-600 text-white py-2 px-3 rounded-md text-xs font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 px-4 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-[1.02]"
                 >
-                  Buy Credits
+                  <span className="flex items-center justify-center space-x-2">
+                    <span>💳</span>
+                    <span>Get More Credits</span>
+                  </span>
                 </button>
               </div>
             </>
@@ -240,42 +164,29 @@ function SideMenu() {
               {/* Hide Home and Interviewers on sign-up page */}
               {!pathname.includes("/sign-up") && (
                 <>
-                  <button
-                    className={`flex flex-row items-center p-3 rounded-md hover:bg-slate-200 cursor-pointer transition-all duration-200 text-left w-full ${
-                      pathname === "/"
-                        ? "bg-indigo-200 shadow-sm"
-                        : "bg-slate-100"
-                    } ${navigating ? "opacity-75" : "opacity-100"}`}
-                    disabled={navigating}
-                    aria-label="Navigate to Home"
-                    aria-current={pathname === "/" ? "page" : undefined}
-                    onClick={() => handleNavigation("/")}
+                  <Link
+                    href="/"
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      pathname === '/'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    <Home 
-                      className="font-thin mr-2 transition-transform duration-200" 
-                      size={20} 
-                      style={{ transform: navigating ? 'scale(0.95)' : 'scale(1)' }}
-                    />
-                    <span className="font-medium">Home</span>
-                  </button>
-                  <button
-                    className={`flex flex-row items-center p-3 rounded-md hover:bg-slate-200 cursor-pointer transition-all duration-200 text-left w-full ${
-                      pathname.includes("/interview/select")
-                        ? "bg-indigo-200 shadow-sm"
-                        : "bg-slate-100"
-                    } ${navigating ? "opacity-75" : "opacity-100"}`}
-                    disabled={navigating}
-                    aria-label="Navigate to Interviewers"
-                    aria-current={pathname.includes("/interview/select") ? "page" : undefined}
-                    onClick={() => handleNavigation("/interview/select")}
+                    <HomeIcon className="w-5 h-5" />
+                    <span>Home</span>
+                  </Link>
+                  <Link
+                    href="/progress"
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      pathname === '/progress'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    <Users 
-                      className="font-thin mr-2 transition-transform duration-200" 
-                      size={20}
-                      style={{ transform: navigating ? 'scale(0.95)' : 'scale(1)' }}
-                    />
-                    <span className="font-medium">Interviewers</span>
-                  </button>
+                    <ChartBarIcon className="w-5 h-5" />
+                    <span>Progress</span>
+                  </Link>
+
                 </>
               )}
               <button

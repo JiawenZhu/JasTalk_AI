@@ -71,18 +71,45 @@ class AuthService {
   // Sign in with email and password
   async signIn(data: SignInData): Promise<AuthResponse> {
     try {
+      console.log('🔐 Attempting sign in for:', data.email);
+      
       const { data: authData, error } = await this.supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password
       })
 
       if (error) {
+        console.error('❌ Sign in error:', error);
+        
+        // Handle specific error types
+        if (error.message.includes('rate limit') || error.message.includes('too many requests')) {
+          return {
+            success: false,
+            error: 'Too many sign-in attempts. Please wait a few minutes and try again.'
+          }
+        }
+        
+        if (error.message.includes('Invalid login credentials')) {
+          return {
+            success: false,
+            error: 'Invalid email or password. Please check your credentials.'
+          }
+        }
+        
+        if (error.message.includes('Email not confirmed')) {
+          return {
+            success: false,
+            error: 'Please check your email and confirm your account before signing in.'
+          }
+        }
+        
         return {
           success: false,
           error: this.getErrorMessage(error)
         }
       }
 
+      console.log('✅ Sign in successful for:', data.email);
       return {
         success: true,
         data: {
@@ -91,11 +118,51 @@ class AuthService {
         }
       }
     } catch (error) {
+      console.error('❌ Unexpected sign in error:', error);
       return {
         success: false,
-        error: 'An unexpected error occurred during sign in'
+        error: 'An unexpected error occurred during sign in. Please try again.'
       }
     }
+  }
+
+  // Sign in with retry mechanism for rate limits
+  async signInWithRetry(data: SignInData, maxRetries: number = 3): Promise<AuthResponse> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔐 Sign in attempt ${attempt}/${maxRetries} for:`, data.email);
+        
+        const result = await this.signIn(data);
+        
+        if (result.success) {
+          return result;
+        }
+        
+        // If it's a rate limit error and we have retries left, wait and retry
+        if (result.error?.includes('rate limit') && attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`⏳ Rate limited, waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        return result;
+      } catch (error) {
+        console.error(`❌ Sign in attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          return {
+            success: false,
+            error: 'Sign in failed after multiple attempts. Please try again later.'
+          };
+        }
+      }
+    }
+    
+    return {
+      success: false,
+      error: 'Sign in failed. Please try again later.'
+    };
   }
 
   // Sign in with OAuth provider

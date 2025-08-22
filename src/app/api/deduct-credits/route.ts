@@ -78,13 +78,31 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 User authenticated: ${user.email}`);
 
-    // Get current subscription (temporarily without leftover_seconds)
-    const { data: subscription, error: fetchError } = await supabase
+    // Get current subscription - prefer pro tier, then most recent
+    const { data: subscriptions, error: fetchError } = await supabase
       .from('user_subscriptions')
-      .select('interview_time_remaining')
+      .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .single();
+      .order('tier', { ascending: false }) // 'pro' comes before 'free' alphabetically
+      .order('created_at', { ascending: false }); // Most recent first
+
+    if (fetchError || !subscriptions || subscriptions.length === 0) {
+      console.log('❌ Subscription fetch error:', fetchError);
+      return NextResponse.json(
+        { error: 'No active subscription found' },
+        { status: 404 }
+      );
+    }
+
+    // Use the first subscription (pro tier if available, otherwise most recent)
+    const subscription = subscriptions[0];
+    console.log(`🔍 Found ${subscriptions.length} active subscriptions, using:`, {
+      id: subscription.id,
+      tier: subscription.tier,
+      remaining: subscription.interview_time_remaining,
+      created: subscription.created_at
+    });
 
     if (fetchError || !subscription) {
       console.log('❌ Subscription fetch error:', fetchError);
@@ -103,26 +121,23 @@ export async function POST(request: NextRequest) {
     
     console.log(`🔍 Calculation: ${totalSeconds}s = ${fullMinutesToDeduct} minutes to deduct`);
     
-    // Check if we have enough credits
-    if (currentCredits < fullMinutesToDeduct) {
-      console.log('❌ Insufficient credits:', currentCredits, '<', fullMinutesToDeduct);
-      return NextResponse.json(
-        { error: 'Insufficient credits' },
-        { status: 400 }
-      );
+    // If requested minutes exceed available, deduct what we can (partial deduction)
+    const minutesToDeduct = Math.min(currentCredits, fullMinutesToDeduct);
+    if (minutesToDeduct < fullMinutesToDeduct) {
+      console.log('⚠️ Partial deduction: requesting', fullMinutesToDeduct, 'but only', minutesToDeduct, 'available');
     }
 
     // Calculate new credits
-    const newCredits = Math.max(0, currentCredits - fullMinutesToDeduct);
+    const newCredits = Math.max(0, currentCredits - minutesToDeduct);
 
-    // Update the subscription with new credits (temporarily without leftover_seconds)
+    // Update only the specific subscription with new credits
     const { error: updateError } = await supabase
       .from('user_subscriptions')
       .update({
         interview_time_remaining: newCredits,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id);
+      .eq('id', subscription.id); // Update by subscription ID, not user ID
 
     if (updateError) {
       console.error('❌ Error updating subscription:', updateError);
@@ -132,14 +147,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Credit deduction successful: ${fullMinutesToDeduct} minutes deducted, ${newCredits} remaining`);
+    console.log(`✅ Credit deduction successful: ${minutesToDeduct} minutes deducted, ${newCredits} remaining`);
 
     const response = NextResponse.json({
       success: true,
-      message: `Successfully deducted ${fullMinutesToDeduct} minute(s)`,
+      message: `Successfully deducted ${minutesToDeduct} minute(s)`,
       remainingCredits: newCredits,
       totalSecondsProcessed: totalSeconds,
-      deductedMinutes: fullMinutesToDeduct
+      deductedMinutes: minutesToDeduct
     });
 
     // Add security headers

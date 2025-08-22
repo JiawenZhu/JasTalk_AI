@@ -18,6 +18,9 @@ import {
   CreditCardIcon
 } from "@heroicons/react/24/outline";
 import { toast } from "@/components/ui/use-toast";
+import { useInterviewSession } from "@/hooks/use-interview-session";
+import { analyzeInterviewProgress, canResumeInterview, type QuestionProgress } from '@/lib/conversation-analysis';
+import CreditsDisplay from "@/components/CreditsDisplay";
 
 interface VoiceAgent {
   agent_id: string;
@@ -48,17 +51,28 @@ export default function Dashboard() {
   const [recentSessions, setRecentSessions] = useState<PracticeSession[]>([]);
   const [allSessions, setAllSessions] = useState<PracticeSession[]>([]);
   const [loading, setLoading] = useState(false); // Start with false, not true
+  
+  // Interview session management
+  const { 
+    allSessions: interviewSessions, 
+    loadAllSessions, 
+    resumeSession,
+    loading: sessionsLoading 
+  } = useInterviewSession();
+  
+  // Conversation logs for resume functionality
+  const [conversationLogs, setConversationLogs] = useState<any[]>([]);
+  const [resumeInfo, setResumeInfo] = useState<{agentId: string; agentName: string; progress: QuestionProgress; logId: string} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSessions, setTotalSessions] = useState(0);
   const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showProgressDetails, setShowProgressDetails] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const sessionsPerPage = 10;
 
-  // Subscription state
-  const [subscription, setSubscription] = useState<any>(null);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  // Credit state is now managed by CreditsDisplay component
 
   // Deletion confirmation modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -84,6 +98,48 @@ export default function Dashboard() {
     setConfirmOpen(false);
   };
 
+  // Load conversation logs to check for resumable interviews
+  const loadConversationLogs = async () => {
+    try {
+      const response = await fetch('/api/get-conversation-logs', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('📊 Conversation logs response:', responseData);
+        
+        // Extract logs array from the response
+        const logs = responseData.logs || [];
+        setConversationLogs(responseData);
+        
+        // Check for resumable interviews
+        // For now, we'll use a default 10 questions per interview
+        // In the future, this could be dynamic based on the interview type
+        const defaultQuestionCount = 10;
+        
+        // Find the most recent incomplete interview across all agents
+        let bestResumeOption = null;
+        
+        for (const log of logs) {
+          const resumeCheck = canResumeInterview([log], log.agent_id, defaultQuestionCount);
+          if (resumeCheck.canResume && resumeCheck.progress) {
+            bestResumeOption = {
+              agentId: log.agent_id,
+              agentName: log.agent_name,
+              progress: resumeCheck.progress,
+              logId: log.id
+            };
+            break; // Take the most recent one
+          }
+        }
+        
+        setResumeInfo(bestResumeOption);
+      }
+    } catch (error) {
+      console.error('Error loading conversation logs:', error);
+    }
+  };
+
   // Function to handle reset and retry for completed sessions
   const handleResetAndRetry = async (session: PracticeSession) => {
     try {
@@ -101,7 +157,8 @@ export default function Dashboard() {
       console.log('📋 Original questions found:', originalQuestions.length);
       
       // Reset the session status to in-progress
-      await fetch('/api/practice-sessions', {
+              await fetch('/api/practice-sessions', {
+          credentials: 'include',
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -144,88 +201,52 @@ return session.type.replace(' Interview', '');
 
   // Fetch practice sessions from database
   const fetchPracticeSessions = useCallback(async () => {
-    if (!isAuthenticated || !user) {
+      if (!isAuthenticated || !user) {
       setLoading(false);
       
-return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch('/api/practice-sessions');
+        return;
+      }
       
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        setLoading(true);
+        const response = await fetch('/api/practice-sessions', {
+        credentials: 'include'
+      });
+        
+        if (response.ok) {
+          const data = await response.json();
         setRecentSessions(data.sessions.slice(0, 5));
         setAllSessions(data.sessions);
         setTotalSessions(data.sessions.length);
+        }
+      } catch (error) {
+        console.error('Error fetching practice sessions:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching practice sessions:', error);
-    } finally {
-      setLoading(false);
-    }
   }, [isAuthenticated, user]);
 
   // Fetch practice sessions only once when user is authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      fetchPracticeSessions();
+    fetchPracticeSessions();
+      // Also load interview sessions for resume functionality
+      loadAllSessions();
+      // Load conversation logs to check for resumable interviews
+      loadConversationLogs();
     } else {
       // Reset loading state when user is not authenticated
       setLoading(false);
       setRecentSessions([]);
       setAllSessions([]);
       setTotalSessions(0);
+      setConversationLogs([]);
+      setResumeInfo(null);
     }
   }, [isAuthenticated, user]); // Only depend on auth state, not the function
 
-  // Fetch user subscription data
-  const fetchSubscription = useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      setSubscriptionLoading(false);
-      
-return;
-    }
-
-    try {
-      setSubscriptionLoading(true);
-      const response = await fetch('/api/user-subscription');
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSubscription(data.subscription);
-      }
-    } catch (error) {
-      console.error('Error fetching subscription:', error);
-    } finally {
-      setSubscriptionLoading(false);
-    }
-  }, [isAuthenticated, user]);
-
-  // Fetch subscription when user is authenticated
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchSubscription();
-    } else {
-      setSubscriptionLoading(false);
-      setSubscription(null);
-    }
-  }, [isAuthenticated, user, fetchSubscription]);
-
-  // Listen for credits updates from interview page
-  useEffect(() => {
-    const handleCreditsUpdated = () => {
-      console.log('🔄 Credits updated, refreshing subscription data...');
-      fetchSubscription();
-    };
-
-    window.addEventListener('credits-updated', handleCreditsUpdated);
-    
-    return () => {
-      window.removeEventListener('credits-updated', handleCreditsUpdated);
-    };
-  }, [fetchSubscription]);
+  // Credit updates are now handled by CreditsDisplay component
+  // No need to fetch subscription data manually
 
   // Handle payment success
   useEffect(() => {
@@ -255,21 +276,56 @@ return;
     router.push('/upload?mode=text');
   };
 
-  const handleContinuePractice = () => {
-    if (recentSessions.length > 0) {
+    const handleContinuePractice = async () => {
+    // Check for resumable interviews based on conversation logs
+    if (resumeInfo) {
+      try {
+        setLoading(true);
+        console.log('🔄 Resuming interview from conversation logs:', {
+          agent: resumeInfo.agentName,
+          questionsAnswered: resumeInfo.progress.questionsAnswered,
+          nextQuestion: resumeInfo.progress.nextQuestionNumber
+        });
+        
+        // Navigate to practice page with resume parameters
+        // We'll pass the log ID and agent info to restore the conversation
+        const resumeParams = new URLSearchParams({
+          resumeFromLog: resumeInfo.logId,
+          agentId: resumeInfo.agentId,
+          questionsAnswered: resumeInfo.progress.questionsAnswered.toString(),
+          nextQuestion: resumeInfo.progress.nextQuestionNumber.toString()
+        });
+        
+        router.push(`/practice/new?${resumeParams.toString()}`);
+        
+        toast({
+          title: "Interview Resumed",
+          description: `Continuing interview with ${resumeInfo.agentName}. Starting from question ${resumeInfo.progress.nextQuestionNumber} of ${resumeInfo.progress.totalQuestions}.`,
+        });
+      } catch (error) {
+        console.error('Error resuming interview:', error);
+        toast({
+          title: "Resume Failed",
+          description: "Failed to resume interview. You can start a new practice instead.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    } else if (recentSessions.length > 0) {
+      // Fallback to old system for backward compatibility
       const lastSession = recentSessions[0];
       if (lastSession.status !== 'completed') {
         router.push(`/practice/continue/${lastSession.id}`);
-      } else {
-        toast({
+    } else {
+      toast({
           title: "No active session",
           description: "All recent sessions are completed. Start a new practice session.",
         });
       }
     } else {
       toast({
-        title: "No sessions found",
-        description: "Start your first practice session to continue.",
+        title: "No sessions to resume",
+        description: "Start your first practice session to begin.",
       });
     }
   };
@@ -279,7 +335,7 @@ return;
   };
 
   const handleChangeAgent = () => {
-    router.push('/interview/select');
+            router.push('/practice/new');
   };
 
   const handleSelectSession = (sessionId: string, checked: boolean) => {
@@ -303,7 +359,7 @@ return;
   const toggleSelecting = () => {
     setIsSelecting(!isSelecting);
     if (isSelecting) {
-      setSelectedSessions([]);
+        setSelectedSessions([]);
       setSelectAll(false);
     }
   };
@@ -347,6 +403,7 @@ return;
       setDeleting(true);
       const response = await fetch('/api/practice-sessions', {
         method: 'DELETE',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -389,12 +446,13 @@ return;
       setDeleting(true);
       const response = await fetch('/api/clear-all-sessions', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
 
       if (response.ok) {
         const data = await response.json();
-        toast({ 
+        toast({
           title: "All Sessions Cleared", 
           description: `Successfully deleted ${data.deletedCount} practice sessions.` 
         });
@@ -414,7 +472,7 @@ return;
     } catch (error) {
       console.error('Error clearing all sessions:', error);
       toast({
-        title: "Error",
+        title: "Error", 
         description: "An error occurred while clearing sessions.",
         variant: "destructive",
       });
@@ -444,7 +502,7 @@ return;
             <h3 className="font-semibold text-blue-900 mb-2">Service Tiers:</h3>
             <div className="text-sm text-blue-800 space-y-1">
               <p>• <strong>Free Users:</strong> 10 minutes interview time</p>
-              <p>• <strong>Pro Users:</strong> $0.12/minute ($7.20/hour) pay-as-you-go</p>
+              <p>• <strong>Pro Users:</strong> 1 minute per minute of practice</p>
               <p className="text-xs text-blue-600 mt-2">Based on actual AI costs: LLM + Voice Engine</p>
             </div>
           </div>
@@ -472,7 +530,7 @@ return;
                 </div>
                 <div className="flex justify-between">
                   <span className="font-semibold text-gray-900">Your Price:</span>
-                  <span className="font-bold text-green-700">$0.12</span>
+                  <span className="font-bold text-green-700">1 minute</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-xs text-gray-600">Profit Margin:</span>
@@ -488,117 +546,140 @@ return;
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
-        {/* Hero Section */}
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
         <AnimatedInterviewBanner />
 
-        {/* Selected Agent Section */}
-        {selectedAgent && (
-          <div className="px-4 py-4">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-lg font-semibold text-blue-600">
-                      {selectedAgent.name.charAt(0)}
+      {/* Selected Agent Section */}
+      {selectedAgent && (
+        <div className="px-4 py-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+                  <span className="text-lg font-semibold text-blue-600">
+                    {selectedAgent.name.charAt(0)}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900">Your Interviewer</h3>
+                  <p className="text-sm text-gray-600">{selectedAgent.name}</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                      {selectedAgent.category}
+                    </span>
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                      {selectedAgent.difficulty}
                     </span>
                   </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">Your Interviewer</h3>
-                    <p className="text-sm text-gray-600">{selectedAgent.name}</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                        {selectedAgent.category}
-                      </span>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                        {selectedAgent.difficulty}
-                      </span>
-                    </div>
-                  </div>
                 </div>
-                <button
-                  className="text-sm text-blue-600 hover:text-blue-700 underline"
-                  onClick={handleChangeAgent}
-                >
-                  Change Interviewer
-                </button>
               </div>
+              <button
+                className="text-sm text-blue-600 hover:text-blue-700 underline"
+                onClick={handleChangeAgent}
+              >
+                Change Interviewer
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Quick Actions Grid */}
-        <div className="px-4 py-6">
+      {/* Quick Actions Grid */}
+      <div className="px-4 py-6">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {/* Upload Document */}
-            <motion.div
-              whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={handleUploadDocument}
-            >
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <CloudArrowUpIcon className="w-6 h-6 text-blue-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">Upload Job Description</span>
+          {/* Upload Document */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handleUploadDocument}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <CloudArrowUpIcon className="w-6 h-6 text-blue-600" />
               </div>
-            </motion.div>
+              <span className="text-sm font-medium text-gray-900">Upload Job Description</span>
+            </div>
+          </motion.div>
 
-            {/* Paste Text */}
-            <motion.div
-              whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={handlePasteText}
-            >
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <DocumentTextIcon className="w-6 h-6 text-green-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">Paste Job Description</span>
+          {/* Paste Text */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+            onClick={handlePasteText}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <DocumentTextIcon className="w-6 h-6 text-green-600" />
               </div>
-            </motion.div>
+              <span className="text-sm font-medium text-gray-900">Paste Job Description</span>
+            </div>
+          </motion.div>
 
-            {/* Continue Practice */}
-            <motion.div
-              whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={handleContinuePractice}
-            >
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <ClockIcon className="w-6 h-6 text-purple-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">Continue Practice</span>
+          {/* Continue Practice */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+              className={`bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50 ${
+                (sessionsLoading || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+              }`}
+              onClick={!sessionsLoading && !loading ? handleContinuePractice : undefined}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                  resumeInfo
+                    ? 'bg-green-100' 
+                    : 'bg-purple-100'
+                }`}>
+                  <ClockIcon className={`w-6 h-6 ${
+                    resumeInfo
+                      ? 'text-green-600' 
+                      : 'text-purple-600'
+                  }`} />
               </div>
-            </motion.div>
+                <span className="text-sm font-medium text-gray-900">
+                  {loading ? 'Loading...' : 'Continue Practice'}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {resumeInfo
+                    ? `Resume from Question ${resumeInfo.progress.nextQuestionNumber} from Last Session`
+                    : 'Start new interview'
+                  }
+                </span>
+            </div>
+          </motion.div>
 
-            {/* View Progress */}
-            <motion.div
-              whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={handleViewProgress}
-            >
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <ChartBarIcon className="w-6 h-6 text-orange-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">My Progress</span>
+            {/* My Progress */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50 cursor-pointer"
+              onClick={() => setShowProgressDetails(!showProgressDetails)}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <ChartBarIcon className="w-6 h-6 text-orange-600" />
               </div>
-            </motion.div>
+              <span className="text-sm font-medium text-gray-900">My Progress</span>
+                {recentSessions.length > 0 && (
+                  <div className="text-xs text-gray-500">
+                    {recentSessions.filter(s => s.score !== undefined).length} scored sessions
+                  </div>
+                )}
+            </div>
+          </motion.div>
 
-            {/* View Logs */}
-            <motion.div
-              whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={() => router.push('/dashboard')}
-            >
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
-                  <DocumentTextIcon className="w-6 h-6 text-indigo-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">View Logs</span>
+          {/* View Logs */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
+              onClick={() => router.push('/conversation-logs')}
+          >
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <DocumentTextIcon className="w-6 h-6 text-indigo-600" />
               </div>
-            </motion.div>
+              <span className="text-sm font-medium text-gray-900">View Logs</span>
+            </div>
+          </motion.div>
 
             {/* Credit Balance Card */}
             <motion.div
@@ -610,38 +691,137 @@ return;
                 <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
                   <CreditCardIcon className="w-6 h-6 text-emerald-600" />
                 </div>
-                <span className="text-sm font-medium text-gray-900">
-                  {subscriptionLoading ? (
-                    <div className="w-16 h-3 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    `Credit $${subscription?.interview_time_remaining ? (subscription.interview_time_remaining * 0.12).toFixed(2) : '0.00'}`
-                  )}
-                </span>
-                {subscription && !subscriptionLoading && (
-                  <span className="text-xs text-gray-500">
-                    {subscription.interview_time_remaining || 0} min left
-                  </span>
-                )}
+                <CreditsDisplay variant="detailed" />
               </div>
             </motion.div>
-          </div>
         </div>
+      </div>
+
+        {/* Progress Details Section */}
+        {showProgressDetails && recentSessions.length > 0 && (
+      <div className="px-4 pb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Progress Analytics</h3>
+                <button
+                  onClick={() => setShowProgressDetails(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Progress Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-700">
+                    {recentSessions.filter(s => s.score !== undefined).length}
+                  </div>
+                  <div className="text-sm text-blue-600">Scored Sessions</div>
+                </div>
+                
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div className="text-2xl font-bold text-green-700">
+                    {recentSessions.filter(s => s.score !== undefined).length > 0 
+                      ? (recentSessions.filter(s => s.score !== undefined).reduce((sum, s) => sum + (s.score || 0), 0) / recentSessions.filter(s => s.score !== undefined).length).toFixed(1)
+                      : '0'}%
+                  </div>
+                  <div className="text-sm text-green-600">Average Score</div>
+                </div>
+                
+                <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                  <div className="text-2xl font-bold text-purple-700">
+                    {recentSessions.length}
+                  </div>
+                  <div className="text-sm text-purple-600">Total Sessions</div>
+                </div>
+                
+                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                  <div className="text-2xl font-bold text-orange-700">
+                    {recentSessions.filter(s => s.score !== undefined && (s.score || 0) >= 80).length}
+                  </div>
+                  <div className="text-sm text-orange-600">High Scores (80%+)</div>
+                </div>
+              </div>
+
+              {/* Score Distribution */}
+              <div className="mb-6">
+                <h4 className="text-lg font-medium text-gray-900 mb-3">Score Distribution</h4>
+                <div className="space-y-3">
+                  {[
+                    { range: '90-100%', color: 'bg-green-500', count: recentSessions.filter(s => s.score !== undefined && (s.score || 0) >= 90).length },
+                    { range: '80-89%', color: 'bg-green-400', count: recentSessions.filter(s => s.score !== undefined && (s.score || 0) >= 80 && (s.score || 0) < 90).length },
+                    { range: '70-79%', color: 'bg-yellow-400', count: recentSessions.filter(s => s.score !== undefined && (s.score || 0) >= 70 && (s.score || 0) < 80).length },
+                    { range: '60-69%', color: 'bg-orange-400', count: recentSessions.filter(s => s.score !== undefined && (s.score || 0) >= 60 && (s.score || 0) < 70).length },
+                    { range: 'Below 60%', color: 'bg-red-400', count: recentSessions.filter(s => s.score !== undefined && (s.score || 0) < 60).length }
+                  ].map(({ range, color, count }) => (
+                    <div key={range} className="flex items-center gap-3">
+                      <div className="w-20 text-sm text-gray-600">{range}</div>
+                      <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                        <div 
+                          className={`h-full ${color} transition-all duration-500`}
+                          style={{ 
+                            width: `${recentSessions.filter(s => s.score !== undefined).length > 0 
+                              ? (count / recentSessions.filter(s => s.score !== undefined).length) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                      </div>
+                      <div className="w-12 text-sm text-gray-600 text-right">{count}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Performance */}
+              <div>
+                <h4 className="text-lg font-medium text-gray-900 mb-3">Recent Performance</h4>
+                <div className="space-y-2">
+                  {recentSessions
+                    .filter(s => s.score !== undefined)
+                    .slice(0, 5)
+                    .map((session) => (
+                      <div key={session.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {getSessionDisplayName(session)}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(session.date).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          (session.score || 0) >= 80 ? 'bg-green-100 text-green-800' :
+                          (session.score || 0) >= 70 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {session.score?.toFixed(1)}%
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Past Practice Sessions */}
         <div className="px-4 pb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="px-4 py-3 border-b border-gray-100">
+          <div className="px-4 py-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Past Practice Sessions</h3>
                 {!isSelecting ? (
                   <>
                     <div className="flex items-center space-x-2">
-                      <button
-                        className="px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50"
-                        onClick={toggleSelecting}
-                      >
-                        Select to Remove
-                      </button>
+                  <button
+                    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50"
+                    onClick={toggleSelecting}
+                  >
+                    Select to Remove
+                  </button>
                       <button
                         className="px-3 py-1.5 text-sm rounded-md border border-red-300 text-red-600 hover:bg-red-50"
                         disabled={deleting}
@@ -678,68 +858,68 @@ return;
                   </>
                 )}
               </div>
+          </div>
+          
+          {loading ? (
+            <div className="px-4 py-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Loading practice sessions...</p>
             </div>
-            
-            {loading ? (
-              <div className="px-4 py-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Loading practice sessions...</p>
-              </div>
-            ) : recentSessions.length > 0 ? (
-              <div className="divide-y divide-gray-100">
-                {recentSessions.map((session) => (
-                  <div key={session.id} className="px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {isSelecting && (
-                          <input
-                            type="checkbox"
-                            className="mt-1 h-4 w-4"
-                            checked={selectedSessions.includes(session.id)}
-                            aria-label="Select session"
-                            onChange={(e) => handleSelectSession(session.id, e.target.checked)}
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-semibold text-gray-900 truncate">
+          ) : recentSessions.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {recentSessions.map((session) => (
+                <div key={session.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {isSelecting && (
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={selectedSessions.includes(session.id)}
+                          aria-label="Select session"
+                          onChange={(e) => handleSelectSession(session.id, e.target.checked)}
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">
                             Interview with {getSessionDisplayName(session)}
-                          </h4>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {new Date(session.date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {session.questionCount} questions
-                          </p>
-                        </div>
+                        </h4>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(session.date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {session.questionCount} questions
+                        </p>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        {session.status !== 'completed' ? (
-                          <button
-                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
-                            onClick={() => router.push(`/practice/continue/${session.id}`)}
-                          >
-                            Continue
-                          </button>
-                        ) : (
-                          <>
-                            {typeof session.score === 'number' && session.score > 0 ? (
-                              <>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      {session.status !== 'completed' ? (
+                        <button
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
+                          onClick={() => router.push(`/practice/continue/${session.id}`)}
+                        >
+                          Continue
+                        </button>
+                      ) : (
+                        <>
+                          {typeof session.score === 'number' && session.score > 0 ? (
+                            <>
                                 <div className={`text-sm font-bold ${session.score >= 80 ? 'text-green-600' : session.score >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                  {session.score}%
-                                </div>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  session.score >= 80 ? 'bg-green-100 text-green-600' :
-                                  session.score >= 60 ? 'bg-yellow-100 text-yellow-600' :
-                                  'bg-red-100 text-red-600'
-                                }`}>
-                                  {session.score >= 80 ? 'A' : session.score >= 60 ? 'B' : 'C'}
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-xs text-gray-400">
-                                {new Date((session as any).endedAt || session.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {session.score}%
                               </div>
-                            )}
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                                session.score >= 80 ? 'bg-green-100 text-green-600' :
+                                session.score >= 60 ? 'bg-yellow-100 text-yellow-600' :
+                                'bg-red-100 text-red-600'
+                              }`}>
+                                  {session.score >= 80 ? 'A' : session.score >= 60 ? 'B' : 'C'}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-gray-400">
+                              {new Date((session as any).endedAt || session.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
                             {/* Reset & Retry Button for Completed Sessions */}
                             <button
                               className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
@@ -748,26 +928,26 @@ return;
                             >
                               Reset & Retry
                             </button>
-                          </>
-                        )}
-                        <button
-                          className="p-2 rounded-lg border border-gray-300 hover:bg-red-50 text-red-600"
-                          aria-label="Delete session"
-                          disabled={deleting}
-                          title="Delete"
+                        </>
+                      )}
+                      <button
+                        className="p-2 rounded-lg border border-gray-300 hover:bg-red-50 text-red-600"
+                        aria-label="Delete session"
+                        disabled={deleting}
+                        title="Delete"
                           onClick={() => openConfirmForSingle(session.id, `Interview with ${getSessionDisplayName(session)} on ${new Date(session.date).toLocaleString()}`)}
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-8 text-center">
-                <MicrophoneIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">No practice sessions yet</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <MicrophoneIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">No practice sessions yet</p>
                 <p className="text-gray-400 text-xs mt-1 mb-4">Start your first interview practice</p>
                 <div className="flex flex-col sm:flex-row gap-2 justify-center">
                   <button
@@ -783,40 +963,40 @@ return;
                     ✍️ Paste Job Description
                   </button>
                 </div>
+            </div>
+          )}
+          
+          {/* Pagination Controls */}
+          {totalSessions > sessionsPerPage && (
+            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Showing {Math.min((currentPage - 1) * sessionsPerPage + 1, totalSessions)} to {Math.min(currentPage * sessionsPerPage, totalSessions)} of {totalSessions} sessions
               </div>
-            )}
-            
-            {/* Pagination Controls */}
-            {totalSessions > sessionsPerPage && (
-              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
-                  Showing {Math.min((currentPage - 1) * sessionsPerPage + 1, totalSessions)} to {Math.min(currentPage * sessionsPerPage, totalSessions)} of {totalSessions} sessions
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    disabled={currentPage === 1}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  >
-                    Previous
-                  </button>
-                  <span className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md">
-                    {currentPage}
-                  </span>
-                  <button
-                    disabled={currentPage >= Math.ceil(totalSessions / sessionsPerPage)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalSessions / sessionsPerPage), prev + 1))}
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md">
+                  {currentPage}
+                </span>
+                <button
+                  disabled={currentPage >= Math.ceil(totalSessions / sessionsPerPage)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalSessions / sessionsPerPage), prev + 1))}
+                >
+                  Next
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Invoice History */}
+        {/* Invoice History - Temporarily removed while migrating to new credit system */}
         <div className="px-4 pb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100">
@@ -826,78 +1006,46 @@ return;
               </h3>
             </div>
             <div className="p-4">
-              {subscription && subscription.invoices ? (
-                <div className="space-y-3">
-                  {subscription.invoices.map((invoice: any) => (
-                    <div key={invoice.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{invoice.package_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {invoice.credits} credits • ${invoice.amount} • {new Date(invoice.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          invoice.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {invoice.status}
-                        </span>
-                        {invoice.invoice_url && (
-                          <a
-                            href={invoice.invoice_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm underline"
-                          >
-                            View Invoice
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <CreditCardIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">No purchase history yet</p>
-                  <p className="text-gray-400 text-xs mt-1">Buy credits to see your invoices here</p>
-                </div>
-              )}
+              <div className="text-center py-6">
+                <CreditCardIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Purchase history temporarily unavailable</p>
+                <p className="text-gray-400 text-xs mt-1">We're updating the credit system</p>
+              </div>
             </div>
-          </div>
         </div>
+      </div>
 
-        {/* Quick Stats */}
-        <div className="px-4 pb-6">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-              <div className="text-lg font-bold text-blue-600">{totalSessions}</div>
-              <div className="text-xs text-gray-500">Total Sessions</div>
+      {/* Quick Stats */}
+      <div className="px-4 pb-6">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-blue-600">{totalSessions}</div>
+            <div className="text-xs text-gray-500">Total Sessions</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-green-600">
+              {allSessions.length > 0 
+                ? Math.round(
+                    allSessions.filter((s) => typeof s.score === 'number').reduce((acc, s) => acc + (s.score as number), 0) /
+                    Math.max(1, allSessions.filter((s) => typeof s.score === 'number').length)
+                  )
+                : 0
+              }%
             </div>
-            <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-              <div className="text-lg font-bold text-green-600">
-                {allSessions.length > 0 
-                  ? Math.round(
-                      allSessions.filter((s) => typeof s.score === 'number').reduce((acc, s) => acc + (s.score as number), 0) /
-                      Math.max(1, allSessions.filter((s) => typeof s.score === 'number').length)
-                    )
-                  : 0
-                }%
-              </div>
-              <div className="text-xs text-gray-500">Avg Score</div>
+            <div className="text-xs text-gray-500">Avg Score</div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
+            <div className="text-lg font-bold text-purple-600">
+              {allSessions.length > 0 
+                ? allSessions.reduce((acc, s) => acc + s.questionCount, 0)
+                : 0
+              }
             </div>
-            <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-              <div className="text-lg font-bold text-purple-600">
-                {allSessions.length > 0 
-                  ? allSessions.reduce((acc, s) => acc + s.questionCount, 0)
-                  : 0
-                }
-              </div>
-              <div className="text-xs text-gray-500">Total Questions</div>
-            </div>
+            <div className="text-xs text-gray-500">Total Questions</div>
           </div>
         </div>
       </div>
+    </div>
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
@@ -910,6 +1058,6 @@ return;
         onConfirm={confirmDeletion}
         onClose={() => setConfirmOpen(false)}
       />
-    </>
+  </>
   );
 }

@@ -37,7 +37,7 @@ export default function GeminiLiveInterviewPage() {
 
   useEffect(() => {
     if (!agent || !agentId) {
-      router.push('/interview/select');
+      router.push('/practice/new');
       return;
     }
 
@@ -143,7 +143,7 @@ export default function GeminiLiveInterviewPage() {
             </Button>
             <Button 
               variant="outline"
-              onClick={() => router.push('/interview/select')}
+              onClick={() => router.push('/practice/new')}
               className="w-full"
             >
               Back to Interviewers
@@ -174,7 +174,7 @@ export default function GeminiLiveInterviewPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push('/interview/select')}
+              onClick={() => router.push('/practice/new')}
               className="text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -275,7 +275,7 @@ export default function GeminiLiveInterviewPage() {
               {/* Navigation Buttons */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button
-                  onClick={() => router.push('/interview/select')}
+                  onClick={() => router.push('/practice/new')}
                   className="flex-1"
                 >
                   Practice with Another Interviewer

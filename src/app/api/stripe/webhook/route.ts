@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, getWebhookSecret } from '@/lib/stripe';
 import { createAdminClient } from '@/lib/supabase';
-import { CREDIT_PACKAGES } from '@/lib/credit-packages';
+import { CREDIT_PACKAGES, SIMPLIFIED_CREDIT_PACKS } from '@/lib/credit-packages';
+import { emailService } from '@/lib/emailService';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -22,7 +23,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
+  // Log all webhook events for debugging
+  console.log('🔔 Webhook received event:', {
+    type: event.type,
+    id: event.id,
+    timestamp: new Date().toISOString()
+  });
+
+  // Handle different webhook events
   if (event.type === 'checkout.session.completed') {
+    // This handles one-time payments (credit purchases)
+    console.log('Webhook: Processing one-time payment (checkout.session.completed)');
     const session = event.data.object;
     console.log('Webhook: Processing checkout.session.completed for session:', session.id);
     
@@ -40,7 +51,7 @@ export async function POST(request: NextRequest) {
       if (session.metadata) {
         userId = session.metadata.userId;
         packageId = session.metadata.packageId;
-        credits = session.metadata.credits;
+        credits = session.metadata.minutes || session.metadata.credits; // Look for 'minutes' first, fallback to 'credits'
         amount = session.metadata.amount;
         stripeMode = session.metadata.stripeMode;
         
@@ -62,7 +73,7 @@ export async function POST(request: NextRequest) {
             
             userId = userId || productMetadata.userId;
             packageId = packageId || productMetadata.packageId;
-            credits = credits || productMetadata.credits;
+            credits = credits || productMetadata.minutes || productMetadata.credits; // Look for 'minutes' first, fallback to 'credits'
             
             console.log('Webhook: Extracted from product metadata:', {
               userId, packageId, credits
@@ -76,19 +87,39 @@ export async function POST(request: NextRequest) {
         console.error('Webhook: Missing metadata in session:', {
           sessionMetadata: session.metadata,
           lineItems: session.line_items,
-          session: session
+          session: session,
+          sessionId: session.id,
+          amount: session.amount_total,
+          currency: session.currency
         });
+        
+        // Try to extract from line items as fallback
+        if (session.line_items && session.line_items.data && session.line_items.data.length > 0) {
+          const lineItem = session.line_items.data[0];
+          console.log('Webhook: Line item details:', {
+            price: lineItem.price,
+            product: lineItem.price?.product,
+            metadata: typeof lineItem.price?.product === 'object' && lineItem.price?.product && 'metadata' in lineItem.price.product ? lineItem.price.product.metadata : undefined
+          });
+        }
+        
         return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
       }
 
-      // Find the package
-      const packageInfo = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+      // Find the package (check simplified packs first, then legacy)
+      let packageInfo = SIMPLIFIED_CREDIT_PACKS[packageId as keyof typeof SIMPLIFIED_CREDIT_PACKS];
+      if (!packageInfo) {
+        packageInfo = CREDIT_PACKAGES.find(pkg => pkg.id === packageId) as any;
+      }
+      
       if (!packageInfo) {
         console.error('Webhook: Invalid package ID:', packageId);
         return NextResponse.json({ error: 'Invalid package' }, { status: 400 });
       }
 
-      console.log(`Webhook: Processing payment for user ${userId}: ${credits} credits for $${amount}`);
+      // Use minutes from package info
+      const minutesToAdd = packageInfo.minutes || parseInt(credits);
+      console.log(`Webhook: Processing payment for user ${userId}: ${minutesToAdd} minutes for $${amount}`);
 
       // Try to get current subscription
       let currentSubscription = null;
@@ -103,10 +134,10 @@ export async function POST(request: NextRequest) {
 
         if (!error && data) {
           currentSubscription = data;
-          console.log(`Webhook: Found existing subscription for user ${userId}:`, {
-            currentCredits: data.interview_time_remaining,
-            totalCredits: data.interview_time_total
-          });
+                  console.log(`Webhook: Found existing subscription for user ${userId}:`, {
+          currentMinutes: data.interview_time_remaining,
+          totalMinutes: data.interview_time_total
+        });
         } else {
           console.log('Webhook: No existing subscription found, will create new one');
         }
@@ -116,19 +147,19 @@ export async function POST(request: NextRequest) {
 
       if (currentSubscription) {
         // Update existing subscription
-        const newCredits = currentSubscription.interview_time_remaining + parseInt(credits);
-        const newTotal = currentSubscription.interview_time_total + parseInt(credits);
+        const newMinutes = currentSubscription.interview_time_remaining + minutesToAdd;
+        const newTotal = currentSubscription.interview_time_total + minutesToAdd;
         
         console.log(`Webhook: Updating subscription for user ${userId}:`, {
-          oldCredits: currentSubscription.interview_time_remaining,
-          newCredits: newCredits,
-          addedCredits: parseInt(credits)
+          oldMinutes: currentSubscription.interview_time_remaining,
+          newMinutes: newMinutes,
+          addedMinutes: minutesToAdd
         });
 
         const { error: updateError } = await supabase
           .from('user_subscriptions')
           .update({
-            interview_time_remaining: newCredits,
+            interview_time_remaining: newMinutes,
             interview_time_total: newTotal,
             updated_at: new Date().toISOString()
           })
@@ -141,7 +172,7 @@ export async function POST(request: NextRequest) {
       } else {
         // Create new subscription
         console.log(`Webhook: Creating new subscription for user ${userId}:`, {
-          initialCredits: parseInt(credits),
+          initialMinutes: minutesToAdd,
           packageId: packageId
         });
 
@@ -151,8 +182,8 @@ export async function POST(request: NextRequest) {
             user_id: userId,
             tier: 'pro',
             status: 'active',
-            interview_time_remaining: parseInt(credits),
-            interview_time_total: parseInt(credits),
+            interview_time_remaining: minutesToAdd,
+            interview_time_total: minutesToAdd,
           });
 
         if (createError) {
@@ -161,7 +192,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log(`Webhook: ✅ Successfully added ${credits} credits to user ${userId}`);
+      console.log(`Webhook: ✅ Successfully added ${minutesToAdd} minutes to user ${userId}`);
       
       // Log the final state for debugging
       try {
@@ -173,8 +204,8 @@ export async function POST(request: NextRequest) {
           
         if (finalSubscription) {
           console.log(`Webhook: Final subscription state for user ${userId}:`, {
-            remainingCredits: finalSubscription.interview_time_remaining,
-            totalCredits: finalSubscription.interview_time_total,
+            remainingMinutes: finalSubscription.interview_time_remaining,
+            totalMinutes: finalSubscription.interview_time_total,
             leftoverSeconds: finalSubscription.leftover_seconds
           });
         }
@@ -212,8 +243,59 @@ export async function POST(request: NextRequest) {
             ],
           } as any);
 
-          // Send the invoice to the customer
-          await stripe.invoices.sendInvoice(invoice.id!);
+          // Get customer email from Stripe
+          const customerResponse = await stripe.customers.retrieve(session.customer as string);
+          const customer = customerResponse.deleted ? null : customerResponse;
+          const customerEmail = customer?.email;
+          
+          if (customerEmail) {
+            // Send invoice email via SendGrid
+            try {
+              const invoiceAmount = `$${(parseFloat(amount || '0')).toFixed(2)}`;
+              await emailService.sendInvoiceEmail({
+                to: customerEmail,
+                username: customer?.name || 'Valued Customer',
+                invoiceNumber: invoice.number || 'N/A',
+                invoiceDate: new Date().toISOString().split('T')[0],
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                amount: invoiceAmount,
+                currency: 'USD',
+                items: [{
+                  description: packageInfo.description || packageInfo.name,
+                  quantity: 1,
+                  unitPrice: invoiceAmount,
+                  amount: invoiceAmount
+                }],
+                subtotal: invoiceAmount,
+                total: invoiceAmount,
+                paymentStatus: 'paid' as const,
+                transactionId: session.id,
+                companyInfo: {
+                  name: 'Jastalk.AI',
+                  address: '123 AI Street',
+                  city: 'San Francisco',
+                  state: 'CA',
+                  zip: '94105',
+                  country: 'USA',
+                  email: 'noreply@jastalk.com'
+                },
+                customerInfo: {
+                  name: customer?.name || 'Valued Customer'
+                },
+                downloadUrl: invoice.hosted_invoice_url || ''
+              });
+              console.log(`Webhook: 📧 Invoice email sent via SendGrid to ${customerEmail}`);
+            } catch (emailError) {
+              console.error('Webhook: Error sending invoice email via SendGrid:', emailError);
+              // Fallback to Stripe's built-in email
+              await stripe.invoices.sendInvoice(invoice.id!);
+              console.log(`Webhook: 📧 Invoice sent via Stripe fallback to ${customerEmail}`);
+            }
+          } else {
+            // Fallback to Stripe's built-in email if no customer email
+            await stripe.invoices.sendInvoice(invoice.id!);
+            console.log('Webhook: 📧 Invoice sent via Stripe (no customer email found)');
+          }
           
           // Store invoice information in database
           try {
@@ -265,6 +347,245 @@ export async function POST(request: NextRequest) {
         stack: error instanceof Error ? error.stack : 'No stack trace',
         error: error
       });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+    }
+  // Handle subscription creation
+  else if (event.type === 'customer.subscription.created') {
+    console.log('Webhook: Processing subscription creation (customer.subscription.created)');
+    const subscription = event.data.object;
+    console.log('Webhook: Processing customer.subscription.created for subscription:', subscription.id);
+    
+    try {
+      const supabase = createAdminClient();
+      
+      // Extract user ID from subscription metadata
+      const userId = subscription.metadata.userId;
+      if (!userId) {
+        console.error('Webhook: Missing userId in subscription metadata');
+        return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      }
+      
+      // Determine minutes based on subscription tier
+      let monthlyMinutes = 480; // Default: 8 hours = 480 minutes for Monthly Credits
+      if (subscription.metadata.tier === 'enterprise') {
+        monthlyMinutes = 960; // 16 hours = 960 minutes for Enterprise
+      } else if (subscription.metadata.tier === 'basic') {
+        monthlyMinutes = 60; // 1 hour = 60 minutes for Basic
+      } else if (subscription.metadata.tier === 'monthly-credits') {
+        monthlyMinutes = 480; // 8 hours = 480 minutes for Monthly Credits Plan
+      }
+      
+      console.log(`Webhook: Processing subscription for user ${userId}: ${monthlyMinutes} minutes`);
+      
+      // Check if subscription already exists for this user
+      const { data: existingSubscription } = await supabase
+        .from('user_subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('tier', 'pro')
+        .single();
+      
+      if (existingSubscription) {
+        // Update existing subscription
+        console.log(`Webhook: Updating existing subscription for user ${userId}`);
+        const { error: updateError } = await supabase
+          .from('user_subscriptions')
+          .update({
+            status: 'active',
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: subscription.customer,
+            interview_time_remaining: monthlyMinutes,
+            interview_time_total: monthlyMinutes,
+            current_period_start: (subscription as any).current_period_start ? new Date((subscription as any).current_period_start * 1000).toISOString() : new Date().toISOString(),
+            current_period_end: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSubscription.id);
+          
+        if (updateError) {
+          console.error('Webhook: Error updating subscription:', updateError);
+          return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+        }
+        
+        console.log(`Webhook: ✅ Successfully updated subscription for user ${userId}`);
+      } else {
+        // Create new subscription record
+        console.log(`Webhook: Creating new subscription for user ${userId}`);
+        const { error: createError } = await supabase
+          .from('user_subscriptions')
+          .insert({
+            user_id: userId,
+            tier: 'pro', // Use 'pro' instead of subscription.metadata.tier to avoid constraint violation
+            status: 'active',
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: subscription.customer,
+            interview_time_remaining: monthlyMinutes,
+            interview_time_total: monthlyMinutes,
+            current_period_start: (subscription as any).current_period_start ? new Date((subscription as any).current_period_start * 1000).toISOString() : new Date().toISOString(),
+            current_period_end: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+          
+        if (createError) {
+          console.error('Webhook: Error creating subscription:', createError);
+          return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
+        }
+        
+        console.log(`Webhook: ✅ Successfully created subscription for user ${userId}`);
+      }
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: `Processed subscription for user ${userId}`,
+        minutesGranted: monthlyMinutes
+      });
+      
+    } catch (error) {
+      console.error('Webhook: Error processing subscription creation:', error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  }
+  // Handle subscription renewals and first payments
+  else if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    console.log('Webhook: Processing invoice.payment_succeeded for invoice:', invoice.id);
+    
+    // Only process subscription invoices (not one-time payments)
+    if ((invoice as any).subscription && (invoice as any).billing_reason === 'subscription_cycle') {
+      try {
+        const supabase = createAdminClient();
+        
+        // Get subscription details from Stripe
+        const subscription = await stripe.subscriptions.retrieve((invoice as any).subscription);
+        console.log('Webhook: Retrieved subscription:', subscription.id);
+        
+        // Extract user ID from subscription metadata
+        const userId = subscription.metadata.userId;
+        if (!userId) {
+          console.error('Webhook: Missing userId in subscription metadata');
+          return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+        }
+        
+        // Calculate minutes for the subscription based on tier
+        let monthlyMinutes = 480; // Default: 8 hours = 480 minutes for Monthly Credits
+        if (subscription.metadata.tier === 'enterprise') {
+          monthlyMinutes = 960; // 16 hours = 960 minutes for Enterprise
+        } else if (subscription.metadata.tier === 'basic') {
+          monthlyMinutes = 60; // 1 hour = 60 minutes for Basic
+        } else if (subscription.metadata.tier === 'monthly-credits') {
+          monthlyMinutes = 480; // 8 hours = 480 minutes for Monthly Credits Plan
+        }
+        
+        console.log(`Webhook: Processing subscription payment for user ${userId}: ${monthlyMinutes} minutes`);
+        
+        // Check if this is a new subscription or renewal
+        const { data: existingSubscription } = await supabase
+          .from('user_subscriptions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+        
+        if (existingSubscription) {
+          // This is a renewal - refresh credits to full amount
+          console.log(`Webhook: Renewing subscription for user ${userId}`);
+          
+          const { error: updateError } = await supabase
+            .from('user_subscriptions')
+            .update({
+              interview_time_remaining: monthlyMinutes,
+              interview_time_total: monthlyMinutes,
+              status: 'active',
+              current_period_start: (subscription as any).current_period_start ? new Date((subscription as any).current_period_start * 1000).toISOString() : new Date().toISOString(),
+              current_period_end: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingSubscription.id);
+            
+          if (updateError) {
+            console.error('Webhook: Error updating subscription:', updateError);
+            return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+          }
+        } else {
+          // This is a new subscription
+          console.log(`Webhook: Creating new Pro subscription for user ${userId}`);
+          
+          const { error: createError } = await supabase
+            .from('user_subscriptions')
+            .insert({
+              user_id: userId,
+              tier: 'pro', // Use 'pro' to match database constraint
+              status: 'active',
+              stripe_subscription_id: subscription.id,
+              stripe_customer_id: subscription.customer,
+              interview_time_remaining: monthlyMinutes,
+              interview_time_total: monthlyMinutes,
+              current_period_start: (subscription as any).current_period_start ? new Date((subscription as any).current_period_start * 1000).toISOString() : new Date().toISOString(),
+              current_period_end: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+            
+          if (createError) {
+            console.error('Webhook: Error creating subscription:', createError);
+            return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
+          }
+        }
+        
+        console.log(`Webhook: ✅ Successfully processed subscription payment for user ${userId}`);
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: `Processed subscription payment for user ${userId}`,
+          minutesGranted: monthlyMinutes
+        });
+        
+      } catch (error) {
+        console.error('Webhook: Error processing subscription payment:', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      }
+    }
+  }
+
+  // Handle subscription cancellation
+  else if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object;
+    console.log('Webhook: Processing customer.subscription.deleted for subscription:', subscription.id);
+    
+    try {
+      const supabase = createAdminClient();
+      
+      // Extract user ID from subscription metadata
+      const userId = subscription.metadata.userId;
+      if (!userId) {
+        console.error('Webhook: Missing userId in subscription metadata');
+        return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      }
+      
+      console.log(`Webhook: Cancelling subscription for user ${userId}`);
+      
+      // Update subscription status to cancelled but keep remaining credits
+      const { error: cancelError } = await supabase
+        .from('user_subscriptions')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('stripe_subscription_id', subscription.id);
+        
+      if (cancelError) {
+        console.error('Webhook: Error cancelling subscription:', cancelError);
+        return NextResponse.json({ error: 'Failed to cancel subscription' }, { status: 500 });
+      }
+      
+      console.log(`Webhook: ✅ Successfully cancelled subscription for user ${userId}`);
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: `Cancelled subscription for user ${userId}`
+      });
+      
+    } catch (error) {
+      console.error('Webhook: Error processing subscription cancellation:', error);
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   }

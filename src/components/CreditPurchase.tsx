@@ -126,7 +126,7 @@ export default function CreditPurchase({ onSuccess }: CreditPurchaseProps) {
               {/* Value Proposition */}
               <div className="text-xs text-gray-500">
                 <p>${(pkg.price / pkg.credits * 100).toFixed(2)} per minute</p>
-                <p>vs. standard $0.12/min</p>
+                <p>vs. standard pay-per-minute</p>
               </div>
             </div>
           </motion.div>

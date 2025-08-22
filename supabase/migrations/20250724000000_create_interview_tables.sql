@@ -5,13 +5,25 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create enum for interview status
-CREATE TYPE interview_status AS ENUM ('draft', 'active', 'completed', 'archived');
+DO $$ BEGIN
+    CREATE TYPE interview_status AS ENUM ('draft', 'active', 'completed', 'archived');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Create enum for practice session status
-CREATE TYPE practice_session_status AS ENUM ('in-progress', 'completed', 'abandoned');
+DO $$ BEGIN
+    CREATE TYPE practice_session_status AS ENUM ('in-progress', 'completed', 'abandoned');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Create enum for question types
-CREATE TYPE question_type AS ENUM ('behavioral', 'technical', 'system-design', 'coding', 'general');
+DO $$ BEGIN
+    CREATE TYPE question_type AS ENUM ('behavioral', 'technical', 'system-design', 'coding', 'general');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Create interviews table
 CREATE TABLE IF NOT EXISTS interviews (
@@ -112,32 +124,41 @@ ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE practice_responses ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies for interviews
+DROP POLICY IF EXISTS "Users can view their own interviews" ON interviews;
 CREATE POLICY "Users can view their own interviews" ON interviews
     FOR SELECT USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own interviews" ON interviews;
 CREATE POLICY "Users can insert their own interviews" ON interviews
     FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own interviews" ON interviews;
 CREATE POLICY "Users can update their own interviews" ON interviews
     FOR UPDATE USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own interviews" ON interviews;
 CREATE POLICY "Users can delete their own interviews" ON interviews
     FOR DELETE USING (auth.uid()::text = user_id);
 
 -- Create RLS policies for practice_sessions
+DROP POLICY IF EXISTS "Users can view their own practice sessions" ON practice_sessions;
 CREATE POLICY "Users can view their own practice sessions" ON practice_sessions
     FOR SELECT USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own practice sessions" ON practice_sessions;
 CREATE POLICY "Users can insert their own practice sessions" ON practice_sessions
     FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own practice sessions" ON practice_sessions;
 CREATE POLICY "Users can update their own practice sessions" ON practice_sessions
     FOR UPDATE USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own practice sessions" ON practice_sessions;
 CREATE POLICY "Users can delete their own practice sessions" ON practice_sessions
     FOR DELETE USING (auth.uid()::text = user_id);
 
 -- Create RLS policies for questions
+DROP POLICY IF EXISTS "Users can view questions for their interviews" ON questions;
 CREATE POLICY "Users can view questions for their interviews" ON questions
     FOR SELECT USING (
         EXISTS (
@@ -147,6 +168,7 @@ CREATE POLICY "Users can view questions for their interviews" ON questions
         )
     );
 
+DROP POLICY IF EXISTS "Users can insert questions for their interviews" ON questions;
 CREATE POLICY "Users can insert questions for their interviews" ON questions
     FOR INSERT WITH CHECK (
         EXISTS (
@@ -156,6 +178,7 @@ CREATE POLICY "Users can insert questions for their interviews" ON questions
         )
     );
 
+DROP POLICY IF EXISTS "Users can update questions for their interviews" ON questions;
 CREATE POLICY "Users can update questions for their interviews" ON questions
     FOR UPDATE USING (
         EXISTS (
@@ -165,6 +188,7 @@ CREATE POLICY "Users can update questions for their interviews" ON questions
         )
     );
 
+DROP POLICY IF EXISTS "Users can delete questions for their interviews" ON questions;
 CREATE POLICY "Users can delete questions for their interviews" ON questions
     FOR DELETE USING (
         EXISTS (
@@ -175,6 +199,7 @@ CREATE POLICY "Users can delete questions for their interviews" ON questions
     );
 
 -- Create RLS policies for practice_responses
+DROP POLICY IF EXISTS "Users can view their own practice responses" ON practice_responses;
 CREATE POLICY "Users can view their own practice responses" ON practice_responses
     FOR SELECT USING (
         EXISTS (
@@ -184,6 +209,7 @@ CREATE POLICY "Users can view their own practice responses" ON practice_response
         )
     );
 
+DROP POLICY IF EXISTS "Users can insert their own practice responses" ON practice_responses;
 CREATE POLICY "Users can insert their own practice responses" ON practice_responses
     FOR INSERT WITH CHECK (
         EXISTS (
@@ -193,6 +219,7 @@ CREATE POLICY "Users can insert their own practice responses" ON practice_respon
         )
     );
 
+DROP POLICY IF EXISTS "Users can update their own practice responses" ON practice_responses;
 CREATE POLICY "Users can update their own practice responses" ON practice_responses
     FOR UPDATE USING (
         EXISTS (
@@ -202,6 +229,7 @@ CREATE POLICY "Users can update their own practice responses" ON practice_respon
         )
     );
 
+DROP POLICY IF EXISTS "Users can delete their own practice responses" ON practice_responses;
 CREATE POLICY "Users can delete their own practice responses" ON practice_responses
     FOR DELETE USING (
         EXISTS (

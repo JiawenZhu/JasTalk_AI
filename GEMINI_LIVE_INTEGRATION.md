@@ -141,7 +141,7 @@ Each Gemini agent can be customized via the `gemini_config` JSON field:
 
 ## Usage Flow
 
-1. **User visits** `/interview/select`
+1. **User visits** `/practice/new`
 2. **Selects an agent** (filtered by subscription)
 3. **Starts interview** (redirected to appropriate type)
 4. **Conducts interview** (text or voice)

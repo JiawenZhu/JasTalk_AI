@@ -1,13 +1,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface VoiceAgent {
-  agent_id: string;
+  id: string;
   name: string;
-  description: string;
-  voice_id: string;
-  category: string;
-  difficulty: string;
-  specialties: string[];
+  displayName: string;
+  voiceId: string;
+  languageCode?: string;
+  personalityType: string;
+  specializations: string[];
+  voiceDescription: string;
+  avatarUrl?: string;
+  isPremium: boolean;
 }
 
 export interface InterviewerState {

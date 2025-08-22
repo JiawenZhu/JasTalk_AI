@@ -72,6 +72,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Check if user has sufficient credits for regular interviews
+    const { data: subscription } = await supabase
+      .from('user_subscriptions')
+      .select('interview_time_remaining')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single();
+
+    const creditsRemaining = subscription?.interview_time_remaining || 0;
+    
+    if (creditsRemaining <= 0) {
+      return NextResponse.json({ 
+        error: 'Insufficient credits - Please add credits to continue interviews',
+        creditsRemaining,
+        requiredCredits: 0.01 // Minimum credit needed
+      }, { status: 402 }); // Payment Required
+    }
+
     if (!interviewer_id || !user_message || !session_id) {
       return NextResponse.json({ 
         error: 'Missing required fields: interviewer_id, user_message, session_id' 

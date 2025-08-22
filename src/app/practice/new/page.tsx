@@ -27,6 +27,7 @@ import { useInterviewSession } from '@/hooks/use-interview-session';
 import { useInterviewPipeline } from '@/hooks/use-interview-pipeline';
 import { mapVoiceIdToGeminiVoice, getVoiceById, getVoiceStats } from '@/lib/voice-config';
 import { CreditValidation } from '@/components/ui/credit-validation';
+import { emailService } from '@/lib/emailService';
 
 class AudioPlayer {
   private audioContext: AudioContext;
@@ -34,11 +35,17 @@ class AudioPlayer {
   private isPlaying = false;
   private source: AudioBufferSourceNode | null = null;
   private sampleRate: number;
+  private gainNode: GainNode;
+  private _volume: number = 1.0;
 
   constructor(sampleRate = 24000) {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.sampleRate = sampleRate;
-     const resumeContext = () => {
+    this.gainNode = this.audioContext.createGain();
+    this.gainNode.connect(this.audioContext.destination);
+    this.gainNode.gain.value = this._volume;
+    
+    const resumeContext = () => {
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(e => console.error("Error resuming AudioContext:", e));
         }
@@ -74,7 +81,7 @@ return;
       console.log('🔊 AudioPlayer: Decoded buffer, duration:', audioBuffer.duration, 'seconds');
       this.source = this.audioContext.createBufferSource();
       this.source.buffer = audioBuffer;
-      this.source.connect(this.audioContext.destination);
+      this.source.connect(this.gainNode); // Connect through gain node for volume control
       this.source.start();
       this.source.onended = () => this.playNextChunk();
       } catch (error) {
@@ -107,6 +114,29 @@ return audioBuffer;
     this.audioQueue = [];
     this.isPlaying = false;
   }
+
+  // Volume control methods
+  public get volume(): number {
+    return this._volume;
+  }
+
+  public set volume(value: number) {
+    this._volume = Math.max(0, Math.min(1, value)); // Clamp between 0 and 1
+    if (this.gainNode) {
+      this.gainNode.gain.value = this._volume;
+    }
+  }
+
+  public pause() {
+    if (this.source) {
+      try {
+        this.source.stop();
+      } catch (e) {
+        console.warn("Audio source couldn't be paused, it might have already finished.");
+      }
+    }
+    this.isPlaying = false;
+  }
 }
 
 function NewPracticePage() {
@@ -130,6 +160,8 @@ function NewPracticePage() {
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>('');
+  const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
+  const [isPausing, setIsPausing] = useState<boolean>(false); // Prevent restart during pause
   const transcriptRef = useRef<string>('');
   const recognitionRef = useRef<any>(null);
   const [conversationHistory, setConversationHistory] = useState<Array<{speaker: 'user' | 'ai', text: string, timestamp: Date}>>([]);
@@ -218,11 +250,62 @@ return prev;
   }, [currentAiResponse, aiResponseStartTime, currentInterview, logUtterance]);
   
   // Resume functionality
-  const resumeSessionKey = searchParams.get('resume');
-  const resumeFromLog = searchParams.get('resumeFromLog');
-  const resumeAgentId = searchParams.get('agentId');
-  const resumeQuestionsAnswered = searchParams.get('questionsAnswered');
-  const resumeNextQuestion = searchParams.get('nextQuestion');
+  const [resumeSessionKey, setResumeSessionKey] = useState<string | null>(searchParams.get('resume'));
+  const [resumeFromLog, setResumeFromLog] = useState<string | null>(searchParams.get('resumeFromLog'));
+  const [resumeAgentId, setResumeAgentId] = useState<string | null>(searchParams.get('agentId'));
+  const [resumeQuestionsAnswered, setResumeQuestionsAnswered] = useState<string | null>(searchParams.get('questionsAnswered'));
+  const [resumeNextQuestion, setResumeNextQuestion] = useState<string | null>(searchParams.get('nextQuestion'));
+  
+  // Store resume data in localStorage for persistence across page reloads
+  useEffect(() => {
+    if (resumeFromLog || resumeSessionKey) {
+      const resumeData = {
+        resumeFromLog,
+        resumeSessionKey,
+        resumeAgentId,
+        resumeQuestionsAnswered,
+        resumeNextQuestion,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('resumeData', JSON.stringify(resumeData));
+    }
+  }, [resumeFromLog, resumeSessionKey, resumeAgentId, resumeQuestionsAnswered, resumeNextQuestion]);
+  
+  // Load resume data from localStorage if URL params are missing
+  useEffect(() => {
+    const storedResumeData = localStorage.getItem('resumeData');
+    if (storedResumeData && !resumeFromLog && !resumeSessionKey) {
+      try {
+        const data = JSON.parse(storedResumeData);
+        // Check if resume data is still valid (within last 24 hours)
+        if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+          console.log('🔄 Loading resume data from localStorage:', data);
+          // Set the resume parameters from stored data
+          if (data.resumeFromLog) {
+            setResumeFromLog(data.resumeFromLog);
+          }
+          if (data.resumeSessionKey) {
+            setResumeSessionKey(data.resumeSessionKey);
+          }
+          if (data.resumeAgentId) {
+            setResumeAgentId(data.resumeAgentId);
+          }
+          if (data.resumeQuestionsAnswered) {
+            setResumeQuestionsAnswered(data.resumeQuestionsAnswered);
+          }
+          if (data.resumeNextQuestion) {
+            setResumeNextQuestion(data.resumeNextQuestion);
+          }
+        } else {
+          // Clear expired resume data
+          localStorage.removeItem('resumeData');
+        }
+      } catch (error) {
+        console.error('❌ Error parsing stored resume data:', error);
+        localStorage.removeItem('resumeData');
+      }
+    }
+  }, []);
   const [isResuming, setIsResuming] = useState(false);
   const [resumeAttempted, setResumeAttempted] = useState(false);
   
@@ -273,12 +356,22 @@ return prev;
     };
   }, [stopInterviewTracking]);
 
-  // Reset resume flag when starting new interview
-  useEffect(() => {
-    if (isInterviewActive && !resumeFromLog && !resumeSessionKey) {
-      setResumeAttempted(false);
-    }
-  }, [isInterviewActive, resumeFromLog, resumeSessionKey]);
+        // Reset resume flag when starting new interview
+      useEffect(() => {
+        if (isInterviewActive && !resumeFromLog && !resumeSessionKey) {
+          setResumeAttempted(false);
+        }
+      }, [isInterviewActive, resumeFromLog, resumeSessionKey]);
+      
+      // Auto-start interview when resuming
+      useEffect(() => {
+        if (selectedAgent && (resumeFromLog || resumeSessionKey) && !isInterviewActive && !isResuming && !isFadingOut && !showPausePanel && !isPausing) {
+          console.log('🚀 Auto-starting resumed interview with agent:', selectedAgent.displayName);
+          // Clear any previous error state before resuming
+          setError(null);
+          startInterview();
+        }
+      }, [selectedAgent, resumeFromLog, resumeSessionKey, isInterviewActive, isResuming, isFadingOut, showPausePanel, isPausing]);
 
   // Silence detection effect for Start Speaking button
   useEffect(() => {
@@ -326,21 +419,48 @@ return () => clearInterval(interval);
         throw new Error('No questions found. Please start a new interview.');
       }
       
-      // Find the agent by ID
-      const agentsResponse = await fetch('/api/voice-agents');
-      if (agentsResponse.ok) {
-        const agentsData = await agentsResponse.json();
-        const agents = agentsData.voice_agents || [];
-        const agent = agents.find((a: any) => a.id === resumeAgentId);
-        
-        if (agent) {
-          dispatch(setSelectedInterviewer({
-            id: agent.id,
-            displayName: agent.displayName,
-            voiceId: agent.voiceId || 'default',
-            languageCode: agent.languageCode || 'en-US'
-          } as VoiceAgent));
+      // Find the agent by ID or name
+      let agent = null;
+      if (resumeAgentId) {
+        const agentsResponse = await fetch('/api/voice-agents');
+        if (agentsResponse.ok) {
+          const agentsData = await agentsResponse.json();
+          const agents = agentsData.voice_agents || [];
+          agent = agents.find((a: any) => a.id === resumeAgentId);
         }
+      }
+      
+      // If no agent found by ID, try to find by name from log data
+      if (!agent && logData.agent_name) {
+        const agentsResponse = await fetch('/api/voice-agents');
+        if (agentsResponse.ok) {
+          const agentsData = await agentsResponse.json();
+          const agents = agentsData.voice_agents || [];
+          agent = agents.find((a: any) => 
+            a.displayName.toLowerCase().includes(logData.agent_name.toLowerCase()) ||
+            a.name.toLowerCase().includes(logData.agent_name.toLowerCase())
+          );
+        }
+      }
+      
+      // Set the selected interviewer if found
+      if (agent) {
+        console.log('✅ Found agent for resume:', agent);
+        dispatch(setSelectedInterviewer({
+          id: agent.id,
+          displayName: agent.displayName,
+          voiceId: agent.voiceId || 'default',
+          languageCode: agent.languageCode || 'en-US'
+        } as VoiceAgent));
+      } else {
+        console.warn('⚠️ No agent found for resume, using fallback');
+        // Set a fallback agent to prevent undefined issues
+        dispatch(setSelectedInterviewer({
+          id: 'fallback',
+          displayName: logData.agent_name || 'AI Interviewer',
+          voiceId: 'Puck',
+          languageCode: 'en-US'
+        } as VoiceAgent));
       }
       
       // Restore conversation history from the log
@@ -381,11 +501,17 @@ return () => clearInterval(interval);
       
       console.log('✅ Interview resumed from conversation log', {
         agent: logData.agent_name,
+        agentId: resumeAgentId,
+        selectedAgent: selectedAgent,
         questionsAnswered: resumeQuestionsAnswered,
         nextQuestion: resumeNextQuestion,
         totalQuestions: questions.length,
         conversationHistoryLength: restoredHistory.length
       });
+      
+      // Clear any previous errors and resume data
+      setError(null);
+      localStorage.removeItem('resumeData');
       
     } catch (error) {
       console.error('❌ Error resuming from conversation log:', error);
@@ -622,6 +748,13 @@ return () => clearInterval(interval);
 
   const connectWebSocket = useCallback((questions: any[], voiceConfig?: any) => {
     console.log('🔌 Attempting WebSocket connection to ws://localhost:3002...');
+    
+    // Prevent WebSocket connection if currently pausing
+    if (isPausing) {
+      console.log('🚫 Cannot setup WebSocket - currently pausing');
+      return;
+    }
+    
     const newWs = new WebSocket('ws://localhost:3002');
     
     // Add error handling
@@ -645,6 +778,7 @@ return () => clearInterval(interval);
     newWs.onopen = () => {
       console.log('✅ WebSocket connected');
       setIsLoading(false);
+      setError(null); // Clear any previous connection errors
       setIsInterviewActive(true);
       setActiveTurn('ai');
       
@@ -891,6 +1025,12 @@ return;
 
 
   const startInterview = async () => {
+    // Prevent starting interview if currently pausing
+    if (isPausing) {
+      console.log('🚫 Cannot start interview - currently pausing');
+      return;
+    }
+    
     // Mark the page as having an active interview
     document.documentElement.setAttribute('data-interview-active', 'true');
     if (!selectedAgent) {
@@ -1048,6 +1188,12 @@ return;
   };
 
   const startListening = () => {
+    // Prevent starting speech recognition if currently pausing
+    if (isPausing) {
+      console.log('🚫 Cannot start speech recognition - currently pausing');
+      return;
+    }
+    
     if (recognitionRef.current) {
       setTranscript('');
       transcriptRef.current = '';
@@ -1321,6 +1467,53 @@ return; // Exit function successfully
     await generatePerformanceAnalysis();
   };
 
+  // Graceful audio fade-out function
+  const gracefulAudioFadeOut = async (): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!audioPlayerRef.current) {
+        resolve();
+        return;
+      }
+
+      const audio = audioPlayerRef.current;
+      const fadeDuration = 1500; // 1.5 seconds fade-out
+      const fadeSteps = 30; // 30 steps for smooth transition
+      const stepDuration = fadeDuration / fadeSteps;
+      const volumeStep = audio.volume / fadeSteps;
+
+      console.log('🎵 Starting graceful audio fade-out...', {
+        currentVolume: audio.volume,
+        fadeDuration,
+        fadeSteps,
+        stepDuration,
+        volumeStep
+      });
+
+      // Set fade-out state for UI feedback
+      setIsFadingOut(true);
+
+      let currentStep = 0;
+      const fadeInterval = setInterval(() => {
+        currentStep++;
+        const newVolume = Math.max(0, audio.volume - volumeStep);
+        
+        audio.volume = newVolume;
+        console.log(`🎵 Fade step ${currentStep}/${fadeSteps}, volume: ${newVolume.toFixed(3)}`);
+
+        if (currentStep >= fadeSteps || newVolume <= 0) {
+          clearInterval(fadeInterval);
+          audio.volume = 0;
+          audio.pause();
+          audio.stop(); // Ensure complete audio stop
+          setIsFadingOut(false); // Clear fade-out state
+          
+          console.log('✅ Audio fade-out completed gracefully');
+          resolve();
+        }
+      }, stepDuration);
+    });
+  };
+
       const pauseInterview = async () => {
     console.log('⏸️ Attempting to pause interview...', { 
       hasCurrentSession: !!currentSession, 
@@ -1329,8 +1522,19 @@ return; // Exit function successfully
       isInterviewActive 
     });
 
+    // Set pause lock to prevent any restart attempts
+    setIsPausing(true);
+
     // Log any pending AI response before pausing
     logPendingAiResponse();
+
+    // Handle graceful audio fade-out if interviewer is speaking
+    if (isAiSpeaking && audioPlayerRef.current) {
+      console.log('🎵 Gracefully fading out interviewer audio...');
+      await gracefulAudioFadeOut();
+      // After fade-out, continue with normal pause flow to save session and show pause panel
+      console.log('🎵 Audio fade-out completed, continuing with pause flow...');
+    }
 
     // Close WebSocket connection
     if (ws) {
@@ -1406,6 +1610,69 @@ return; // Exit function successfully
         
         // Show pause panel with Continue Practice button
         setShowPausePanel(true);
+        
+        // Clear resume parameters to prevent auto-restart
+        setResumeFromLog(null);
+        setResumeSessionKey(null);
+        setResumeAgentId(null);
+        setResumeQuestionsAnswered(null);
+        setResumeNextQuestion(null);
+        
+        // Send pause summary email to user
+        if (user?.email) {
+          try {
+            const timeSpent = interviewStartTimeRef.current 
+              ? Math.floor((Date.now() - interviewStartTimeRef.current.getTime()) / 1000)
+              : 0;
+            
+            const questionsCompleted = Math.floor(conversationHistory.filter(h => h.speaker === 'user').length);
+            const totalQuestions = (() => {
+              const storedQuestions = localStorage.getItem('generatedQuestions');
+              if (storedQuestions) {
+                try {
+                  const questions = JSON.parse(storedQuestions);
+                  return questions.length;
+                } catch (e) {
+                  return 10; // fallback
+                }
+              }
+              return 10;
+            })();
+            
+            // Generate conversation summary
+            const conversationSummary = `You had a ${Math.floor(timeSpent / 60)} minute conversation with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
+            
+            // Prepare detailed logs
+            const detailedLogs = conversationHistory.map(entry => ({
+              speaker: entry.speaker === 'user' ? 'user' as const : 'ai' as const,
+              text: entry.text,
+              timestamp: entry.timestamp.toISOString()
+            }));
+            
+            // Create resume URL
+            const resumeUrl = `${window.location.origin}/practice/new?resumeFromLog=${currentSession?.sessionKey || 'latest'}&agentId=${selectedAgent?.id || 'unknown'}&questionsAnswered=${questionsCompleted}&nextQuestion=${questionsCompleted + 1}`;
+            
+            // Send email
+            await emailService.sendInterviewPauseSummaryEmail({
+              to: user.email,
+              username: user.email?.split('@')[0] || 'User',
+              interviewerName: selectedAgent?.displayName || 'AI Interviewer',
+              interviewTitle: `Practice Interview with ${selectedAgent?.displayName || 'AI Interviewer'}`,
+              questionsAnswered: questionsCompleted,
+              totalQuestions: totalQuestions,
+              duration: `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s`,
+              conversationSummary,
+              detailedLogs,
+              resumeUrl
+            });
+            
+            console.log('📧 Pause summary email sent to:', user.email);
+            sonnerToast.success('Interview summary sent to your email!');
+          } catch (emailError) {
+            console.warn('⚠️ Failed to send pause summary email:', emailError);
+            // Don't show error to user - email failure shouldn't break pause functionality
+          }
+        }
         
         // Don't auto-redirect - let user choose when to continue
         console.log('⏸️ Interview paused - user can continue later');
@@ -1537,7 +1804,7 @@ return; // Exit function successfully
       
       {!showAnalysis && (
         <AnimatePresence>
-          {!isInterviewActive ? (
+          {!isInterviewActive && !resumeFromLog && !resumeSessionKey ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Button variant="ghost" className="mb-4" onClick={() => router.push('/dashboard')}>
               <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
@@ -1549,7 +1816,7 @@ return; // Exit function successfully
               <CardContent>
                 <div className="max-h-[60vh] overflow-y-auto pr-2">
                   <VoiceAgentSelector selectedAgentId={selectedAgent?.id || null} onAgentSelect={handleAgentSelect} />
-          </div>
+                </div>
                 <Button 
                   disabled={isLoading || !selectedAgent} 
                   className="w-full mt-4 py-3 text-lg font-semibold" 
@@ -1562,6 +1829,30 @@ return; // Exit function successfully
                   {isLoading ? 'Connecting...' : 'Start Voice Interview'}
                 </Button>
                 {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
+              </CardContent>
+            </Card>
+          </motion.div>
+          ) : !isInterviewActive && (resumeFromLog || resumeSessionKey) ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Button variant="ghost" className="mb-4" onClick={() => router.push('/dashboard')}>
+              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+            </Button>
+            <Card>
+              <CardHeader>
+                <CardTitle>Resuming Interview...</CardTitle>
+              </CardHeader>
+              <CardContent className="text-center">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {isResuming ? 'Loading your interview session...' : 'Preparing to resume...'}
+                </p>
+                {selectedAgent && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Interviewer: {selectedAgent.displayName}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -1623,7 +1914,15 @@ return; // Exit function successfully
                   {activeTurn === 'ai' && !lastAgentResponse ? (
                     <p className="text-gray-500 italic">Interviewer is thinking...</p>
                   ) : (
-                    <p className="text-lg">{lastAgentResponse || 'Hi, nice to meet you. We\'ll keep this to about 15 minutes. May I start with your experience in user research and how you applied insights to improve a past project?'}</p>
+                    <div className="space-y-2">
+                      <p className="text-lg">{lastAgentResponse || 'Hi, nice to meet you. We\'ll keep this to about 15 minutes. May I start with your experience in user research and how you applied insights to improve a past project?'}</p>
+                      {isFadingOut && (
+                        <div className="flex items-center justify-center space-x-2 text-orange-600 animate-pulse">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>
+                          <span className="text-sm font-medium">Fading out audio...</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -1677,14 +1976,20 @@ return; // Exit function successfully
                 {/* Simplified conversation status */}
                 <div className="flex justify-center items-center mb-6">
                   <div className="flex items-center space-x-4 bg-gray-50 dark:bg-gray-800 rounded-full px-6 py-3">
-                    <div className={`w-3 h-3 rounded-full ${isAiSpeaking ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`} />
+                    <div className={`w-3 h-3 rounded-full ${
+                      isFadingOut ? 'bg-orange-500 animate-pulse' :
+                      isAiSpeaking ? 'bg-blue-500 animate-pulse' : 
+                      'bg-gray-300'
+                    }`} />
                     <span className="text-sm">
-                      {isAiSpeaking ? 'Interviewer is speaking...' : 'Your turn to respond'}
-                  </span>
-                    {!isAiSpeaking && (
+                      {isFadingOut ? 'Fading out audio...' :
+                       isAiSpeaking ? 'Interviewer is speaking...' : 
+                       'Your turn to respond'}
+                    </span>
+                    {!isAiSpeaking && !isFadingOut && (
                       <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
                     )}
-              </div>
+                  </div>
                 </div>
 
                                 {/* Simple Live Transcript */}

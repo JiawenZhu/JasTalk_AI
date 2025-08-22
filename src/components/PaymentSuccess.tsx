@@ -88,7 +88,7 @@ export default function PaymentSuccess() {
               {creditsAdded} min
             </div>
             <div className="text-gray-600">
-              ${(creditsAdded * 0.12).toFixed(2)} worth of practice time
+              ${creditsAdded} minutes of practice time
             </div>
           </motion.div>
 

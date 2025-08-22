@@ -36,16 +36,53 @@ export async function POST(request: NextRequest) {
   try {
     console.log('=== Generate Questions API Called ===');
     
-    // Auth is optional for generation. If available, we may fetch per-user config; otherwise use defaults
-    let user: { id: string } | null = null;
-    try {
-      const supabase = createServerClient();
-      const { data: { user: u } } = await supabase.auth.getUser();
-      user = u ?? null;
-      console.log('User auth result:', user ? `User ID: ${user.id}` : 'No user authenticated');
-    } catch (error) {
-      console.log('Supabase auth error (this is normal for unauthenticated requests):', error);
+    // Auth is required for question generation
+    const supabase = createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized - Please sign in to generate questions' }, { status: 401 });
     }
+
+    // Check if user has sufficient credits
+    // Check user's remaining credits (aggregated from all subscriptions)
+    const { data: subscriptions, error: subError } = await supabase
+      .from('user_subscriptions')
+      .select('interview_time_remaining, interview_time_total, tier, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    if (subError && subError.code !== 'PGRST116') {
+      console.error('Error fetching subscriptions:', subError);
+      
+      return NextResponse.json({ error: 'Failed to fetch subscription data' }, { status: 500 });
+    }
+
+    // Aggregate credits from all active subscriptions
+    const totalMinutes = subscriptions?.reduce((total, sub) => total + (sub.interview_time_remaining || 0), 0) || 0;
+    const creditsRemaining = totalMinutes;
+    
+    console.log('🔍 Generate Questions API - Credit check:', {
+      userId: user.id,
+      totalSubscriptions: subscriptions?.length || 0,
+      subscriptions: subscriptions?.map(s => ({ 
+        remaining: s.interview_time_remaining,
+        total: s.interview_time_total,
+        tier: s.tier
+      })),
+      totalMinutes,
+      creditsRemaining
+    });
+    
+    if (creditsRemaining <= 0) {
+      return NextResponse.json({ 
+        error: 'Insufficient credits - Please add credits to generate questions',
+        creditsRemaining,
+        requiredCredits: 0.01 // Minimum credit needed
+      }, { status: 402 }); // Payment Required
+    }
+
+    console.log('User auth result:', `User ID: ${user.id}, Credits: ${creditsRemaining}`);
 
     const body: GenerateQuestionsRequest = await request.json();
     const { jobDescription, numberOfQuestions, questionCount, questionType, interviewType, difficulty, focusAreas } = body;
