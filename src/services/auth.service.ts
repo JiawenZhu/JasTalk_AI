@@ -200,6 +200,94 @@ class AuthService {
     }
   }
 
+  // Update password with recovery token
+  async updatePasswordWithToken(newPassword: string, accessToken: string, refreshToken: string): Promise<AuthResponse> {
+    try {
+      // Set the session with the recovery tokens
+      const { error: setSessionError } = await this.supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      })
+
+      if (setSessionError) {
+        return {
+          success: false,
+          error: this.getErrorMessage(setSessionError)
+        }
+      }
+
+      // Update the password
+      const { error: updateError } = await this.supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (updateError) {
+        return {
+          success: false,
+          error: this.getErrorMessage(updateError)
+        }
+      }
+
+      return {
+        success: true
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'An unexpected error occurred during password update with token'
+      }
+    }
+  }
+
+  // Force refresh session
+  async forceRefreshSession(): Promise<AuthResponse> {
+    try {
+      const { data, error } = await this.supabase.auth.refreshSession()
+      
+      if (error) {
+        return {
+          success: false,
+          error: this.getErrorMessage(error)
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          session: data.session,
+          user: data.user
+        }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'An unexpected error occurred during session refresh'
+      }
+    }
+  }
+
+  // Clear invalid tokens
+  async clearInvalidTokens(): Promise<AuthResponse> {
+    try {
+      // Clear any stored tokens
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('supabase.auth.token')
+        localStorage.removeItem('supabase.auth.refreshToken')
+        sessionStorage.removeItem('supabase.auth.token')
+        sessionStorage.removeItem('supabase.auth.refreshToken')
+      }
+
+      return {
+        success: true
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'An unexpected error occurred while clearing tokens'
+      }
+    }
+  }
+
   // Update user profile
   async updateProfile(data: UpdateProfileData): Promise<AuthResponse> {
     try {

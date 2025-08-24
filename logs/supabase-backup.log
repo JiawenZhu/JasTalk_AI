@@ -1,0 +1,19 @@
+2025-08-23 10:36:49 - 🚀 Starting Supabase backup process
+2025-08-23 10:36:49 - 🔄 Starting weekly Supabase backup...
+2025-08-23 10:36:50 - 📁 Backup file: ./backups/supabase/jastalk-ai-backup-20250823-103650.sql
+2025-08-23 10:36:50 - 🔄 Creating database backup...
+2025-08-23 10:36:54 - ✅ Database dump created successfully
+2025-08-23 10:36:54 - 🗜️ Compressing backup file...
+2025-08-23 10:36:54 - ✅ Backup compressed successfully
+2025-08-23 10:36:54 - 📊 Backup size: 4.0K
+2025-08-23 10:36:54 - 🔍 Verifying backup integrity...
+2025-08-23 10:36:54 - ✅ Backup file exists and has content
+2025-08-23 10:36:54 - 🧹 Cleaning up old backups...
+2025-08-23 10:36:54 - ✅ Old backups cleaned up
+2025-08-23 10:36:54 - 📋 Current backup files:
+2025-08-23 10:36:54 - ⏱️ Backup duration: 0m 5s
+2025-08-23 10:36:54 - ✅ Backup completed successfully
+2025-08-23 10:36:54 - 🎉 Weekly backup completed successfully!
+2025-08-23 10:36:54 - 🏥 Running backup health check...
+2025-08-23 10:36:54 - ✅ Health check passed:        1 recent backups found
+2025-08-23 10:36:54 - 🎯 Backup process completed successfully

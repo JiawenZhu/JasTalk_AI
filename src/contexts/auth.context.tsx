@@ -15,10 +15,13 @@ interface AuthContextType {
   signOut: () => Promise<AuthResponse>;
   resetPassword: (data: PasswordResetData) => Promise<AuthResponse>;
   updatePassword: (newPassword: string) => Promise<AuthResponse>;
+  updatePasswordWithToken: (newPassword: string, accessToken: string, refreshToken: string) => Promise<AuthResponse>;
   updateProfile: (data: UpdateProfileData) => Promise<AuthResponse>;
   getUserFullName: (user: User | null) => string;
   getUserInitials: (user: User | null) => string;
   refreshSession: () => Promise<AuthResponse>;
+  forceRefreshSession: () => Promise<AuthResponse>;
+  clearInvalidTokens: () => Promise<AuthResponse>;
   handleAuthCallback: () => Promise<AuthResponse>;
 }
 
@@ -135,10 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut: async () => ({ success: false, error: 'Not mounted' }),
         resetPassword: async () => ({ success: false, error: 'Not mounted' }),
         updatePassword: async () => ({ success: false, error: 'Not mounted' }),
+        updatePasswordWithToken: async () => ({ success: false, error: 'Not mounted' }),
         updateProfile: async () => ({ success: false, error: 'Not mounted' }),
         getUserFullName: () => '',
         getUserInitials: () => '',
         refreshSession: async () => ({ success: false, error: 'Not mounted' }),
+        forceRefreshSession: async () => ({ success: false, error: 'Not mounted' }),
+        clearInvalidTokens: async () => ({ success: false, error: 'Not mounted' }),
         handleAuthCallback: async () => ({ success: false, error: 'Not mounted' })
       }}>
         {children}
@@ -183,6 +189,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await authService.updatePassword(newPassword);
   };
 
+  const updatePasswordWithToken = async (newPassword: string, accessToken: string, refreshToken: string): Promise<AuthResponse> => {
+    return await authService.updatePasswordWithToken(newPassword, accessToken, refreshToken);
+  };
+
   const updateProfile = async (data: UpdateProfileData): Promise<AuthResponse> => {
     const result = await authService.updateProfile(data);
     if (result.success && result.data?.user) {
@@ -203,6 +213,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await authService.handleAuthCallback();
   };
 
+  const forceRefreshSession = async (): Promise<AuthResponse> => {
+    return await authService.forceRefreshSession();
+  };
+
+  const clearInvalidTokens = async (): Promise<AuthResponse> => {
+    return await authService.clearInvalidTokens();
+  };
+
   const value = {
     user,
     session,
@@ -214,10 +232,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     resetPassword,
     updatePassword,
+    updatePasswordWithToken,
     updateProfile,
     getUserFullName,
     getUserInitials,
     refreshSession,
+    forceRefreshSession,
+    clearInvalidTokens,
     handleAuthCallback,
   };
 
