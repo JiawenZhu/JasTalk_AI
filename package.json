@@ -75,7 +75,6 @@
     "critters": "^0.0.25",
     "embla-carousel-react": "^8.0.0-rc22",
     "framer-motion": "^11.18.2",
-    "fs": "^0.0.1-security",
     "init": "^0.1.2",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
@@ -132,5 +131,8 @@
     "fs": false,
     "os": false,
     "path": false
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
