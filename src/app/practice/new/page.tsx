@@ -125,7 +125,7 @@ return questions.length;
 return 10;
       })();
       
-      const conversationSummary = `You had a ${Math.floor(timeSpent / 60)} minute conversation with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
+      const conversationSummary = `You had a ${Math.floor(timeSpent / 60)} minute conversation with ${selectedAgent?.name || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
       
       // Enhanced conversation transcript with turn numbers and context
       const conversationTranscript = conversationHistory.map((entry, index) => ({
