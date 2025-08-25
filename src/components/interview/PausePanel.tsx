@@ -18,7 +18,8 @@ const PausePanel: React.FC<PausePanelProps> = ({
   questionsAnswered, 
   totalQuestions, 
   duration,
-  onClose
+  onClose,
+  onSendEmail
 }) => {
   const [animationPhase, setAnimationPhase] = useState<'pause' | 'progress' | 'instructions'>('pause');
 

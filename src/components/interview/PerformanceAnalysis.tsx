@@ -71,6 +71,7 @@ const PerformanceAnalysis: React.FC<PerformanceAnalysisProps> = ({
   onShareResults,
   onGoHome,
   onAskQuestions,
+  onSendEmail,
 }) => {
   const [showLog, setShowLog] = React.useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = React.useState(false);
