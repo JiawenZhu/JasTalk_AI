@@ -51,3 +51,37 @@ export const dollarsToMinutes = (dollars: number): number => {
 export const minutesToDollars = (minutes: number): number => {
   return Math.round(minutes * 0.12 * 100) / 100;
 };
+
+// Simplified credit packs for admin operations
+export const SIMPLIFIED_CREDIT_PACKS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    credits: 100,
+    price: 12.00,
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    credits: 167,
+    price: 20.00,
+  },
+  {
+    id: 'advanced',
+    name: 'Advanced',
+    credits: 200,
+    price: 24.00,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    credits: 400,
+    price: 48.00,
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    credits: 833,
+    price: 100.00,
+  },
+];
