@@ -250,7 +250,7 @@ const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
 // Provider component
 export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(creditsReducer, initialState);
-  const { isAuthenticated, user, validateSession } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   // Helper functions
   const addCredits = useCallback((minutes: number) => {
@@ -326,22 +326,10 @@ return;
     console.log('🔄 Refreshing credits...');
     console.log('🔍 Auth state check:', { isAuthenticated, user: user?.email });
     
-    // If not authenticated, try to validate session first
+    // If not authenticated, skip refresh
     if (!isAuthenticated) {
-      console.log('🔄 User not authenticated, attempting session validation...');
-      try {
-        const isValid = await validateSession();
-        if (isValid) {
-          console.log('✅ Session validated, user is now authenticated');
-          // Wait a bit for auth state to update
-          setTimeout(() => refreshCredits(), 100);
-          return;
-        } else {
-          console.log('❌ Session validation failed, using emergency fallback credits');
-        }
-      } catch (error) {
-        console.error('❌ Error during session validation:', error);
-      }
+      console.log('❌ User not authenticated, cannot refresh credits');
+      return;
     }
 
     if (!isAuthenticated) {
@@ -481,7 +469,7 @@ return;
       
       dispatch({ type: "SET_ERROR", payload: "Using fallback credits due to system error" });
     }
-  }, [isAuthenticated, state.minutes, user?.email, validateSession, state.isTracking, state.isPostInterviewLock]);
+  }, [isAuthenticated, state.minutes, user?.email, state.isTracking, state.isPostInterviewLock]);
 
   // Interview tracking state
   // Remove local isTracking state since it's now in the global state
