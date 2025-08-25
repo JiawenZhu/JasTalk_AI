@@ -15,11 +15,15 @@ interface AuthContextType {
   signOut: () => Promise<AuthResponse>;
   resetPassword: (data: PasswordResetData) => Promise<AuthResponse>;
   updatePassword: (newPassword: string) => Promise<AuthResponse>;
+  updatePasswordWithToken: (newPassword: string, accessToken: string, refreshToken: string) => Promise<AuthResponse>;
   updateProfile: (data: UpdateProfileData) => Promise<AuthResponse>;
   getUserFullName: (user: User | null) => string;
   getUserInitials: (user: User | null) => string;
   refreshSession: () => Promise<AuthResponse>;
+  forceRefreshSession: () => Promise<AuthResponse>;
+  clearInvalidTokens: () => Promise<AuthResponse>;
   handleAuthCallback: () => Promise<AuthResponse>;
+  validateSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -84,18 +88,108 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { session: currentSession, error: sessionError } = await authService.getSession();
       if (sessionError) {
         console.error('Session error:', sessionError);
+        
+        // Try to refresh the session if there's an error
+        console.log('🔄 Attempting to refresh session...');
+        const refreshResult = await authService.refreshSession();
+        if (refreshResult.success) {
+          console.log('✅ Session refreshed successfully');
+          setSession(refreshResult.data.session);
+          setUser(refreshResult.data.user);
+          setLoading(false);
+          return;
+        } else {
+          console.log('❌ Session refresh failed:', refreshResult.error);
+          // Clear invalid session state
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
       }
 
       // Get current user
       const { user: currentUser, error: userError } = await authService.getUser();
       if (userError) {
         console.error('User error:', userError);
+        
+        // If user fetch fails, try to refresh session
+        if (currentSession) {
+          console.log('🔄 Attempting to refresh session due to user fetch failure...');
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success) {
+            console.log('✅ Session refreshed successfully after user fetch failure');
+            setSession(refreshResult.data.session);
+            setUser(refreshResult.data.user);
+            setLoading(false);
+            return;
+          } else {
+            // Clear invalid session state
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+        } else {
+          // No session, clear state
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Validate that we have both session and user
+      if (!currentSession || !currentUser) {
+        console.log('❌ Missing session or user, clearing auth state');
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      // Verify session is still valid by checking expiration
+      const now = Math.floor(Date.now() / 1000);
+      if (currentSession.expires_at && currentSession.expires_at < now) {
+        console.log('❌ Session expired, attempting refresh...');
+        const refreshResult = await authService.refreshSession();
+        if (refreshResult.success) {
+          console.log('✅ Expired session refreshed successfully');
+          setSession(refreshResult.data.session);
+          setUser(refreshResult.data.user);
+        } else {
+          console.log('❌ Failed to refresh expired session, clearing state');
+          setSession(null);
+          setUser(null);
+        }
+        setLoading(false);
+        return;
       }
 
       setSession(currentSession);
       setUser(currentUser);
+      console.log('✅ Auth state initialized successfully:', currentUser.email);
     } catch (error) {
       console.error('Auth initialization error:', error);
+      
+      // Try one more time to refresh session
+      try {
+        console.log('🔄 Final attempt to refresh session...');
+        const refreshResult = await authService.refreshSession();
+        if (refreshResult.success) {
+          console.log('✅ Session refreshed successfully on final attempt');
+          setSession(refreshResult.data.session);
+          setUser(refreshResult.data.user);
+        } else {
+          console.log('❌ Final session refresh attempt failed, clearing state');
+          setSession(null);
+          setUser(null);
+        }
+      } catch (refreshError) {
+        console.error('Final session refresh attempt failed:', refreshError);
+        setSession(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -129,8 +223,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
 
-    // Temporarily disable initializeAuth to prevent infinite loop
-    // Will re-enable once the auth state is stable
+    // Initialize auth state when component mounts
+    initializeAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = authService.onAuthStateChange(
@@ -167,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [mounted]); // Remove initializeAuth dependency to prevent infinite loops
+  }, [mounted, initializeAuth]); // Re-enable initializeAuth dependency
 
   // Don't render until mounted to prevent hydration mismatch
   if (!mounted) {
@@ -183,11 +277,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut: async () => ({ success: false, error: 'Not mounted' }),
         resetPassword: async () => ({ success: false, error: 'Not mounted' }),
         updatePassword: async () => ({ success: false, error: 'Not mounted' }),
+        updatePasswordWithToken: async () => ({ success: false, error: 'Not mounted' }),
         updateProfile: async () => ({ success: false, error: 'Not mounted' }),
         getUserFullName: () => '',
         getUserInitials: () => '',
         refreshSession: async () => ({ success: false, error: 'Not mounted' }),
-        handleAuthCallback: async () => ({ success: false, error: 'Not mounted' })
+        forceRefreshSession: async () => ({ success: false, error: 'Not mounted' }),
+        clearInvalidTokens: async () => ({ success: false, error: 'Not mounted' }),
+        handleAuthCallback: async () => ({ success: false, error: 'Not mounted' }),
+        validateSession: async () => false
       }}>
         {children}
       </AuthContext.Provider>
@@ -232,6 +330,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await authService.updatePassword(newPassword);
   };
 
+  const updatePasswordWithToken = async (newPassword: string, accessToken: string, refreshToken: string): Promise<AuthResponse> => {
+    return await authService.updatePasswordWithToken(newPassword, accessToken, refreshToken);
+  };
+
   const updateProfile = async (data: UpdateProfileData): Promise<AuthResponse> => {
     const result = await authService.updateProfile(data);
     if (result.success && result.data?.user) {
@@ -252,6 +354,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await authService.handleAuthCallback();
   };
 
+  const forceRefreshSession = async (): Promise<AuthResponse> => {
+    try {
+      const result = await authService.forceRefreshSession();
+      if (result.success) {
+        const { session: currentSession, user: currentUser } = result.data;
+        setSession(currentSession);
+        setUser(currentUser);
+      }
+      return result;
+    } catch (error) {
+      console.error('Error forcing session refresh:', error);
+      return {
+        success: false,
+        error: 'Failed to force session refresh'
+      };
+    }
+  };
+
+  const clearInvalidTokens = async (): Promise<AuthResponse> => {
+    try {
+      const result = await authService.clearInvalidTokens();
+      if (result.success) {
+        console.log('Invalid tokens cleared successfully.');
+      } else {
+        console.error('Failed to clear invalid tokens:', result.error);
+      }
+      return result;
+    } catch (error) {
+      console.error('Error clearing invalid tokens:', error);
+      return {
+        success: false,
+        error: 'Failed to clear invalid tokens'
+      };
+    }
+  };
+
+  const validateSession = async (): Promise<boolean> => {
+    try {
+      const result = await authService.validateSession();
+      if (result.success) {
+        const { session: currentSession, user: currentUser } = result.data;
+        setSession(currentSession);
+        setUser(currentUser);
+        return true;
+      } else {
+        console.error('Session validation failed:', result.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error validating session:', error);
+      return false;
+    }
+  };
+
   const value = {
     user,
     session,
@@ -263,11 +419,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     resetPassword,
     updatePassword,
+    updatePasswordWithToken,
     updateProfile,
     getUserFullName,
     getUserInitials,
     refreshSession,
+    forceRefreshSession,
+    clearInvalidTokens,
     handleAuthCallback,
+    validateSession
   };
 
   return (

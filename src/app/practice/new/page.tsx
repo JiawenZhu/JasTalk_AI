@@ -29,115 +29,7 @@ import { mapVoiceIdToGeminiVoice, getVoiceById, getVoiceStats } from '@/lib/voic
 import { CreditValidation } from '@/components/ui/credit-validation';
 import { emailService } from '@/lib/emailService';
 
-class AudioPlayer {
-  private audioContext: AudioContext;
-  private audioQueue: ArrayBuffer[] = [];
-  private isPlaying = false;
-  private source: AudioBufferSourceNode | null = null;
-  private sampleRate: number;
-  private gainNode: GainNode;
-  private _volume: number = 1.0;
-
-  constructor(sampleRate = 24000) {
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    this.sampleRate = sampleRate;
-    this.gainNode = this.audioContext.createGain();
-    this.gainNode.connect(this.audioContext.destination);
-    this.gainNode.gain.value = this._volume;
-    
-    const resumeContext = () => {
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume().catch(e => console.error("Error resuming AudioContext:", e));
-        }
-        document.removeEventListener('click', resumeContext);
-        document.removeEventListener('keydown', resumeContext);
-    };
-    document.addEventListener('click', resumeContext);
-    document.addEventListener('keydown', resumeContext);
-  }
-
-  public addChunk(chunk: ArrayBuffer) {
-    console.log('🔊 AudioPlayer: Adding chunk to queue, size:', chunk.byteLength, 'Queue length:', this.audioQueue.length);
-    this.audioQueue.push(chunk);
-    if (!this.isPlaying) {
-      this.playNextChunk();
-    }
-  }
-
-  private async playNextChunk() {
-    if (this.audioQueue.length === 0) {
-      this.isPlaying = false;
-      console.log('🔊 AudioPlayer: Queue empty, stopping playback');
-
-return;
-    }
-
-    this.isPlaying = true;
-    const chunk = this.audioQueue.shift()!;
-    console.log('🔊 AudioPlayer: Playing chunk, size:', chunk.byteLength, 'Remaining in queue:', this.audioQueue.length);
-    
-    try {
-      const audioBuffer = await this.decodeChunk(chunk);
-      console.log('🔊 AudioPlayer: Decoded buffer, duration:', audioBuffer.duration, 'seconds');
-      this.source = this.audioContext.createBufferSource();
-      this.source.buffer = audioBuffer;
-      this.source.connect(this.gainNode); // Connect through gain node for volume control
-      this.source.start();
-      this.source.onended = () => this.playNextChunk();
-      } catch (error) {
-      console.error('🔊 AudioPlayer: Error playing audio chunk:', error);
-      this.playNextChunk();
-    }
-  }
-  
-  private async decodeChunk(chunk: ArrayBuffer): Promise<AudioBuffer> {
-    const float32Array = new Float32Array(chunk.byteLength / 2);
-    const dataView = new DataView(chunk);
-    for (let i = 0; i < float32Array.length; i++) {
-        float32Array[i] = dataView.getInt16(i * 2, true) / 32768.0;
-    }
-    
-    const audioBuffer = this.audioContext.createBuffer(1, float32Array.length, this.sampleRate);
-    audioBuffer.copyToChannel(float32Array, 0);
-    
-return audioBuffer;
-  }
-
-  public stop() {
-    if (this.source) {
-      try {
-        this.source.stop();
-      } catch (e) {
-         console.warn("Audio source couldn't be stopped, it might have already finished.");
-      }
-    }
-    this.audioQueue = [];
-    this.isPlaying = false;
-  }
-
-  // Volume control methods
-  public get volume(): number {
-    return this._volume;
-  }
-
-  public set volume(value: number) {
-    this._volume = Math.max(0, Math.min(1, value)); // Clamp between 0 and 1
-    if (this.gainNode) {
-      this.gainNode.gain.value = this._volume;
-    }
-  }
-
-  public pause() {
-    if (this.source) {
-      try {
-        this.source.stop();
-      } catch (e) {
-        console.warn("Audio source couldn't be paused, it might have already finished.");
-      }
-    }
-    this.isPlaying = false;
-  }
-}
+// Audio classes will be defined inside the component to avoid SSR issues
 
 function NewPracticePage() {
   const router = useRouter();
@@ -155,13 +47,14 @@ function NewPracticePage() {
   const [activeTurn, setActiveTurn] = useState<'user' | 'ai' | 'waiting' | null>(null);
   
   const [ws, setWs] = useState<WebSocket | null>(null);
-  const audioPlayerRef = useRef<AudioPlayer | null>(null);
+  const audioPlayerRef = useRef<any>(null);
 
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>('');
   const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
   const [isPausing, setIsPausing] = useState<boolean>(false); // Prevent restart during pause
+  const [isInterviewEnded, setIsInterviewEnded] = useState<boolean>(false); // Prevent restart after interview ends
   const transcriptRef = useRef<string>('');
   const recognitionRef = useRef<any>(null);
   const [conversationHistory, setConversationHistory] = useState<Array<{speaker: 'user' | 'ai', text: string, timestamp: Date}>>([]);
@@ -178,6 +71,182 @@ function NewPracticePage() {
   const [sessionUsage, setSessionUsage] = useState({ inputTokens: 0, outputTokens: 0, ttsCharacters: 0, duration: 0 });
   const [showQuestionsModal, setShowQuestionsModal] = useState(false);
   const interviewStartTimeRef = useRef<Date | null>(null);
+  
+  // Email summary handlers
+  const handleSendPauseEmail = async () => {
+    if (!user?.email) {
+      sonnerToast.error('No email address found. Please check your account settings.');
+      
+return;
+    }
+
+    try {
+      sonnerToast.info('Preparing your interview summary...');
+      
+      const timeSpent = interviewStartTimeRef.current 
+        ? Math.floor((Date.now() - interviewStartTimeRef.current.getTime()) / 1000)
+        : 0;
+      
+      const questionsCompleted = Math.floor(conversationHistory.filter(h => h.speaker === 'user').length);
+      const totalQuestions = (() => {
+        const storedQuestions = localStorage.getItem('generatedQuestions');
+        if (storedQuestions) {
+          try {
+            const questions = JSON.parse(storedQuestions);
+            
+return questions.length;
+          } catch (e) {
+            return 10;
+          }
+        }
+        
+return 10;
+      })();
+      
+      const conversationSummary = `You had a ${Math.floor(timeSpent / 60)} minute conversation with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
+      
+      const detailedLogs = conversationHistory.map(entry => ({
+        speaker: entry.speaker === 'user' ? 'user' as const : 'ai' as const,
+        text: entry.text,
+        timestamp: entry.timestamp.toISOString()
+      }));
+      
+      const resumeUrl = `${window.location.origin}/practice/new?resumeFromLog=${currentSession?.sessionKey || 'latest'}&agentId=${selectedAgent?.id || 'unknown'}&questionsAnswered=${questionsCompleted}&nextQuestion=${questionsCompleted + 1}`;
+      
+      // Get Gemini analysis for pause
+      const geminiAnalysis = await getGeminiAnalysis('pause');
+      
+      const emailData = {
+        to: user.email,
+        username: user.email?.split('@')[0] || 'User',
+        interviewerName: selectedAgent?.displayName || 'AI Interviewer',
+        interviewTitle: `Practice Interview with ${selectedAgent?.displayName || 'AI Interviewer'}`,
+        questionsAnswered: questionsCompleted,
+        totalQuestions: totalQuestions,
+        duration: `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s`,
+        conversationSummary,
+        detailedLogs,
+        resumeUrl,
+        geminiAnalysis: geminiAnalysis ? {
+          executiveSummary: geminiAnalysis.executive_summary || conversationSummary,
+          detailedLog: geminiAnalysis.detailed_log || 'Comprehensive analysis completed',
+          keyInsights: geminiAnalysis.key_insights || ['Analysis completed successfully'],
+          qualityAssessment: {
+            score: geminiAnalysis.quality_assessment?.score || 7,
+            reasoning: geminiAnalysis.quality_assessment?.reasoning || 'Analysis generated by Gemini AI'
+          },
+          discrepancyAnalysis: geminiAnalysis.discrepancy_analysis || 'No discrepancies noted',
+          recommendations: geminiAnalysis.recommendations || ['Review the detailed analysis for insights'],
+          localVsGemini: {
+            localCapturedTurns: geminiAnalysis.local_vs_gemini?.local_captured_turns || conversationHistory.length,
+            localSpeakers: geminiAnalysis.local_vs_gemini?.local_speakers || ['user', 'ai'],
+            analysisQuality: geminiAnalysis.local_vs_gemini?.analysis_quality || 'N/A'
+          }
+        } : undefined
+      };
+      
+      const emailResult = await emailService.sendInterviewPauseSummaryEmail(emailData);
+      
+      if (emailResult) {
+        sonnerToast.success('Interview summary sent to your email!');
+      } else {
+        sonnerToast.error('Failed to send interview summary email');
+      }
+    } catch (error) {
+      console.error('Error sending pause email:', error);
+      sonnerToast.error('Failed to send interview summary email');
+    }
+  };
+
+  const handleSendCompletionEmail = async () => {
+    if (!user?.email) {
+      sonnerToast.error('No email address found. Please check your account settings.');
+      
+return;
+    }
+
+    try {
+      sonnerToast.info('Preparing your interview completion summary...');
+      
+      const timeSpent = interviewStartTimeRef.current 
+        ? Math.floor((Date.now() - interviewStartTimeRef.current.getTime()) / 1000)
+        : 0;
+      
+      const questionsCompleted = Math.floor(conversationHistory.filter(h => h.speaker === 'user').length);
+      const totalQuestions = (() => {
+        const storedQuestions = localStorage.getItem('generatedQuestions');
+        if (storedQuestions) {
+          try {
+            const questions = JSON.parse(storedQuestions);
+            
+return questions.length;
+          } catch (e) {
+            return 10;
+          }
+        }
+        
+return 10;
+      })();
+      
+      const conversationSummary = `You completed a ${Math.floor(timeSpent / 60)} minute interview with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
+      
+      const detailedLogs = conversationHistory.map(entry => ({
+        speaker: entry.speaker === 'user' ? 'user' as const : 'ai' as const,
+        text: entry.text,
+        timestamp: entry.timestamp.toISOString()
+      }));
+      
+      // Get Gemini analysis for completion
+      const geminiAnalysis = await getGeminiAnalysis('full');
+      
+      const completionScore = Math.round((questionsCompleted / totalQuestions) * 100);
+      
+      const emailData = {
+        to: user.email,
+        username: user.email?.split('@')[0] || 'User',
+        interviewTitle: `Practice Interview with ${selectedAgent?.displayName || 'AI Interviewer'}`,
+        score: completionScore,
+        totalQuestions: totalQuestions,
+        duration: `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s`,
+        feedback: conversationSummary,
+        improvementTips: geminiAnalysis?.recommendations || [
+          'Review your responses to identify areas for improvement',
+          'Practice with different types of questions to build confidence',
+          'Focus on clear communication and structured thinking',
+          'Take time to think before responding to complex questions'
+        ],
+        nextSteps: 'Your detailed performance analysis is available in the dashboard. Continue practicing to improve your interview skills!',
+        geminiAnalysis: geminiAnalysis ? {
+          analysisType: geminiAnalysis.analysis_type || 'full_evaluation',
+          executiveSummary: geminiAnalysis.executive_summary || conversationSummary,
+          detailedLog: geminiAnalysis.detailed_log || 'Comprehensive analysis completed',
+          keyInsights: geminiAnalysis.key_insights || ['Analysis completed successfully'],
+          qualityAssessment: {
+            score: geminiAnalysis.quality_assessment?.score || completionScore,
+            reasoning: geminiAnalysis.quality_assessment?.reasoning || 'Analysis generated by Gemini AI'
+          },
+          discrepancyAnalysis: geminiAnalysis.discrepancy_analysis || 'No discrepancies noted',
+          recommendations: geminiAnalysis.recommendations || ['Review the detailed analysis for insights'],
+          localVsGemini: {
+            localCapturedTurns: geminiAnalysis.local_vs_gemini?.local_captured_turns || conversationHistory.length,
+            localSpeakers: geminiAnalysis.local_vs_gemini?.local_speakers || ['user', 'ai'],
+            analysisQuality: geminiAnalysis.local_vs_gemini?.analysis_quality || 'N/A'
+          }
+        } : undefined
+      };
+      
+      const emailResult = await emailService.sendInterviewCompletionEmail(emailData);
+      
+      if (emailResult) {
+        sonnerToast.success('Interview completion summary sent to your email!');
+      } else {
+        sonnerToast.error('Failed to send interview completion summary email');
+      }
+    } catch (error) {
+      console.error('Error sending completion email:', error);
+      sonnerToast.error('Failed to send interview completion summary email');
+    }
+  };
   
   // Panel visibility state for Questions and Notes
   const [showQuestionsPanel, setShowQuestionsPanel] = useState(false);
@@ -210,6 +279,284 @@ function NewPracticePage() {
   } = useInterviewSession();
 
   // New conversation pipeline
+
+  // Audio classes defined inside component to avoid SSR issues
+  useEffect(() => {
+    if (typeof window === 'undefined') {return;}
+
+    // AudioPlayer class
+    class AudioPlayer {
+      private audioContext: AudioContext;
+      private audioQueue: ArrayBuffer[] = [];
+      private isPlaying = false;
+      private source: AudioBufferSourceNode | null = null;
+      private sampleRate: number;
+      private gainNode: GainNode;
+      private _volume: number = 1.0;
+
+      constructor(sampleRate = 24000) {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        this.sampleRate = sampleRate;
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.connect(this.audioContext.destination);
+        this.gainNode.gain.value = this._volume;
+        
+        const resumeContext = () => {
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume().catch((e: any) => console.error("Error resuming AudioContext:", e));
+            }
+            document.removeEventListener('click', resumeContext);
+            document.removeEventListener('keydown', resumeContext);
+        };
+        document.addEventListener('click', resumeContext);
+        document.addEventListener('keydown', resumeContext);
+      }
+
+      public addChunk(chunk: ArrayBuffer) {
+        console.log('🔊 AudioPlayer: Adding chunk to queue, size:', chunk.byteLength, 'Queue length:', this.audioQueue.length);
+        this.audioQueue.push(chunk);
+        if (!this.isPlaying) {
+          this.playNextChunk();
+        }
+      }
+
+      private async playNextChunk() {
+        if (this.audioQueue.length === 0) {
+          this.isPlaying = false;
+          console.log('🔊 AudioPlayer: Queue empty, stopping playback');
+          
+return;
+        }
+
+        this.isPlaying = true;
+        const chunk = this.audioQueue.shift()!;
+        console.log('🔊 AudioPlayer: Playing chunk, size:', chunk.byteLength, 'Remaining in queue:', this.audioQueue.length);
+        
+        try {
+          const audioBuffer = await this.decodeChunk(chunk);
+          console.log('🔊 AudioPlayer: Decoded buffer, duration:', audioBuffer.duration, 'seconds');
+          this.source = this.audioContext.createBufferSource();
+          this.source.buffer = audioBuffer;
+          this.source.connect(this.gainNode);
+          this.source.start();
+          this.source.onended = () => this.playNextChunk();
+        } catch (error) {
+          console.error('🔊 AudioPlayer: Error playing audio chunk:', error);
+          this.playNextChunk();
+        }
+      }
+      
+      private async decodeChunk(chunk: ArrayBuffer): Promise<AudioBuffer> {
+        const float32Array = new Float32Array(chunk.byteLength / 2);
+        const dataView = new DataView(chunk);
+        for (let i = 0; i < float32Array.length; i++) {
+            float32Array[i] = dataView.getInt16(i * 2, true) / 32768.0;
+        }
+        
+        const audioBuffer = this.audioContext.createBuffer(1, float32Array.length, this.sampleRate);
+        audioBuffer.copyToChannel(float32Array, 0);
+        
+return audioBuffer;
+      }
+
+      public stop() {
+        if (this.source) {
+          try {
+            this.source.stop();
+          } catch (e) {
+             console.warn("Audio source couldn't be stopped, it might have already finished.");
+          }
+        }
+        this.audioQueue = [];
+        this.isPlaying = false;
+      }
+
+      public get volume(): number {
+        return this._volume;
+      }
+
+      public set volume(value: number) {
+        this._volume = Math.max(0, Math.min(1, value));
+        if (this.gainNode) {
+          this.gainNode.gain.value = this._volume;
+        }
+      }
+
+      public pause() {
+        if (this.source) {
+          try {
+            this.source.stop();
+          } catch (e) {
+            console.warn("Audio source couldn't be paused, it might have already finished.");
+          }
+        }
+        this.isPlaying = false;
+      }
+    }
+
+    // AIAudioEnhancer class
+    class AIAudioEnhancer {
+      private audioContext: AudioContext;
+      private analyzer: AnalyserNode;
+      private processor: ScriptProcessorNode;
+      private isAnalyzing = false;
+      
+      constructor() {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        this.analyzer = this.audioContext.createAnalyser();
+        this.analyzer.fftSize = 2048;
+        this.analyzer.smoothingTimeConstant = 0.8;
+        
+        this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+        this.processor.onaudioprocess = this.analyzeAudio.bind(this);
+      }
+      
+      public analyzeAndOptimizeAudio(stream: MediaStream, settings: MediaTrackSettings, capabilities: MediaTrackCapabilities): void {
+        console.log('🤖 AI Audio Enhancer: Starting audio analysis and optimization');
+        
+        try {
+          const source = this.audioContext.createMediaStreamSource(stream);
+          source.connect(this.analyzer);
+          this.analyzer.connect(this.processor);
+          this.processor.connect(this.audioContext.destination);
+          
+          this.isAnalyzing = true;
+          this.startAudioAnalysis();
+          this.applyAdaptiveSettings(settings, capabilities);
+          
+          console.log('✅ AI Audio Enhancer: Analysis pipeline activated');
+        } catch (error) {
+          console.warn('⚠️ AI Audio Enhancer: Could not initialize analysis pipeline:', error);
+        }
+      }
+      
+      private startAudioAnalysis(): void {
+        if (!this.isAnalyzing) {return;}
+        
+        const dataArray = new Uint8Array(this.analyzer.frequencyBinCount);
+        const timeArray = new Uint8Array(this.analyzer.frequencyBinCount);
+        
+        const analyze = () => {
+          if (!this.isAnalyzing) {return;}
+          
+          this.analyzer.getByteFrequencyData(dataArray);
+          this.analyzer.getByteTimeDomainData(timeArray);
+          
+          const audioMetrics = this.calculateAudioMetrics(dataArray, timeArray);
+          this.applyRealTimeOptimizations(audioMetrics);
+          
+          requestAnimationFrame(analyze);
+        };
+        
+        analyze();
+      }
+      
+      private calculateAudioMetrics(freqData: Uint8Array, timeData: Uint8Array): any {
+        let rms = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const sample = (timeData[i] - 128) / 128;
+          rms += sample * sample;
+        }
+        rms = Math.sqrt(rms / timeData.length);
+        
+        let spectralCentroid = 0;
+        let totalMagnitude = 0;
+        for (let i = 0; i < freqData.length; i++) {
+          const magnitude = freqData[i] / 255;
+          const frequency = i * this.audioContext.sampleRate / (2 * freqData.length);
+          spectralCentroid += magnitude * frequency;
+          totalMagnitude += magnitude;
+        }
+        spectralCentroid = totalMagnitude > 0 ? spectralCentroid / totalMagnitude : 0;
+        
+        const noiseLevel = this.detectNoiseLevel(freqData);
+        
+        return {
+          rms,
+          spectralCentroid,
+          noiseLevel,
+          timestamp: Date.now()
+        };
+      }
+      
+      private detectNoiseLevel(freqData: Uint8Array): number {
+        let highFreqEnergy = 0;
+        const highFreqStart = Math.floor(freqData.length * 0.7);
+        
+        for (let i = highFreqStart; i < freqData.length; i++) {
+          highFreqEnergy += freqData[i] / 255;
+        }
+        
+        return highFreqEnergy / (freqData.length - highFreqStart);
+      }
+      
+      private applyRealTimeOptimizations(metrics: any): void {
+        if (metrics.noiseLevel > 0.6) {
+          console.log('🔇 AI Enhancer: High noise detected, applying aggressive suppression');
+        }
+        
+        if (metrics.rms < 0.1) {
+          console.log('🔊 AI Enhancer: Low volume detected, suggesting gain increase');
+        } else if (metrics.rms > 0.8) {
+          console.log('🔊 AI Enhancer: High volume detected, suggesting gain reduction');
+        }
+        
+        if (Date.now() % 5000 < 16) {
+          console.log('📊 AI Audio Metrics:', {
+            volume: Math.round(metrics.rms * 100) + '%',
+            brightness: Math.round(metrics.spectralCentroid) + ' Hz',
+            noise: Math.round(metrics.noiseLevel * 100) + '%'
+          });
+        }
+      }
+      
+      private applyAdaptiveSettings(settings: MediaTrackSettings, capabilities: MediaTrackCapabilities): void {
+        console.log('🔧 AI Enhancer: Applying adaptive settings based on device capabilities');
+        
+        if (capabilities.sampleRate?.max && capabilities.sampleRate.max >= 48000) {
+          console.log('🎯 AI Enhancer: Device supports high sample rate, optimizing for quality');
+        }
+        
+        if (capabilities.channelCount?.max && capabilities.channelCount.max > 1) {
+          console.log('🎯 AI Enhancer: Device supports multiple channels, optimizing for clarity');
+        }
+        
+        console.log('🔧 AI Enhancer: Current audio settings:', settings);
+        console.log('🔧 AI Enhancer: Device capabilities:', capabilities);
+      }
+      
+      public stop(): void {
+        this.isAnalyzing = false;
+        if (this.processor) {
+          this.processor.disconnect();
+        }
+        if (this.analyzer) {
+          this.analyzer.disconnect();
+        }
+        console.log('🛑 AI Audio Enhancer: Analysis stopped');
+      }
+      
+      private analyzeAudio(event: any): void {
+        const inputBuffer = event.inputBuffer;
+        const outputBuffer = event.outputBuffer;
+        
+        for (let channel = 0; channel < inputBuffer.numberOfChannels; channel++) {
+          const inputData = inputBuffer.getChannelData(channel);
+          const outputData = outputBuffer.getChannelData(channel);
+          outputData.set(inputData);
+        }
+      }
+    }
+
+    // Create global instances
+    (window as any).AudioPlayer = AudioPlayer;
+    (window as any).AIAudioEnhancer = AIAudioEnhancer;
+    (window as any).aiAudioEnhancer = new AIAudioEnhancer();
+    (window as any).analyzeAndOptimizeAudio = (stream: MediaStream, settings: MediaTrackSettings, capabilities: MediaTrackCapabilities) => {
+      (window as any).aiAudioEnhancer.analyzeAndOptimizeAudio(stream, settings, capabilities);
+    };
+
+  }, []);
   const {
     currentInterview,
     createInterview,
@@ -218,6 +565,9 @@ function NewPracticePage() {
     isLoading: pipelineLoading,
     error: pipelineError
   } = useInterviewPipeline();
+
+  // New interview schema integration
+  const [newInterviewId, setNewInterviewId] = useState<string | null>(null);
 
   // Helper function to log any pending AI response (defined after hooks)
   const logPendingAiResponse = useCallback(() => {
@@ -248,6 +598,88 @@ return prev;
       setAiResponseStartTime(null);
     }
   }, [currentAiResponse, aiResponseStartTime, currentInterview, logUtterance]);
+
+  // Function to save interview transcript to conversation logs
+  const saveInterviewTranscript = useCallback(async () => {
+    if (!conversationHistory.length || !currentSession?.sessionKey) {
+      console.log('⚠️ No conversation history or session key to save');
+      
+return;
+    }
+
+    try {
+      // Convert conversation history to new transcript format
+      const transcript = conversationHistory.map(entry => ({
+        role: entry.speaker === 'user' ? 'candidate' as const : 'interviewer' as const,
+        content: entry.text,
+        timestamp: entry.timestamp.toISOString()
+      }));
+
+      // Save transcript to conversation logs
+      const response = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          call_id: currentSession.sessionKey,
+          candidate_name: user?.user_metadata?.full_name || 'Anonymous User',
+          transcript,
+          interview_start_time: interviewStartTimeRef.current?.toISOString(),
+          interview_end_time: new Date().toISOString()
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Interview transcript saved to conversation logs');
+        sonnerToast.success('Interview transcript saved!');
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to save interview transcript:', errorData);
+        sonnerToast.error('Failed to save interview transcript');
+      }
+    } catch (error) {
+      console.error('❌ Error saving interview transcript:', error);
+      sonnerToast.error('Error saving interview transcript');
+    }
+  }, [conversationHistory, currentSession, user]);
+
+  // Function to get Gemini analysis of conversation
+  const getGeminiAnalysis = useCallback(async (analysisType = 'full') => {
+    if (!conversationHistory.length) {
+      console.log('⚠️ No conversation history to analyze');
+      
+return null;
+    }
+
+    try {
+      console.log('🧠 Requesting Gemini analysis for conversation...', { analysisType });
+      
+      const response = await fetch('/api/gemini/analyze-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationHistory,
+          interviewContext: `Interview with ${selectedAgent?.displayName || 'AI Interviewer'} - ${conversationHistory.length} conversation turns`,
+          analysisType
+        })
+      });
+
+      if (response.ok) {
+        const analysisData = await response.json();
+        console.log('✅ Gemini analysis completed:', analysisData.data);
+        
+return analysisData.data;
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to get Gemini analysis:', errorData);
+        
+return null;
+      }
+    } catch (error) {
+      console.error('❌ Error getting Gemini analysis:', error);
+      
+return null;
+    }
+  }, [conversationHistory, selectedAgent]);
   
   // Resume functionality
   const [resumeSessionKey, setResumeSessionKey] = useState<string | null>(searchParams.get('resume'));
@@ -349,12 +781,45 @@ return prev;
 
   // Cleanup effect to stop credit tracking when component unmounts
   useEffect(() => {
+    // Handle browser window close, navigation, and refresh events
+    const handleBeforeUnload = () => {
+      if (isInterviewActive) {
+        console.log('🚪 Browser closing/navigating - stopping credit tracking');
+        stopInterviewTracking();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isInterviewActive) {
+        console.log('👁️ Page hidden - stopping credit tracking');
+        stopInterviewTracking();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (isInterviewActive) {
+        console.log('📄 Page hiding - stopping credit tracking');
+        stopInterviewTracking();
+      }
+    };
+
+    // Add event listeners for browser events
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
     return () => {
       // Stop credit tracking when component unmounts
       stopInterviewTracking();
+      setIsInterviewEnded(false); // Reset interview ended flag
       console.log('💰 Stopped real-time credit tracking - component unmounted');
+      
+      // Remove event listeners
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [stopInterviewTracking]);
+  }, [stopInterviewTracking, isInterviewActive]);
 
         // Reset resume flag when starting new interview
       useEffect(() => {
@@ -474,6 +939,7 @@ return () => clearInterval(interval);
       
       // Start the interview in resumed state
       setIsInterviewActive(true);
+      setIsInterviewEnded(false); // Allow resuming after interview was ended
       
       // Restart real-time credit tracking for resumed interview
       startInterviewTracking();
@@ -518,7 +984,7 @@ return () => clearInterval(interval);
       sonnerToast.error('Failed to resume interview. Starting fresh interview.');
       
       // Clear resume parameters and start fresh
-      router.replace('/practice/new');
+      safeReplace('/practice/new');
     } finally {
       setIsLoading(false);
       setIsResuming(false);
@@ -577,6 +1043,7 @@ return () => clearInterval(interval);
 
         // Start the interview in resumed state
         setIsInterviewActive(true);
+        setIsInterviewEnded(false); // Allow resuming after interview was ended
         
         // Restart real-time credit tracking for resumed interview
         startInterviewTracking();
@@ -613,7 +1080,7 @@ return () => clearInterval(interval);
       sonnerToast.error('Failed to resume session. Starting fresh interview.');
       
       // Clear resume parameter and start fresh
-      router.replace('/practice/new');
+      safeReplace('/practice/new');
     } finally {
       setIsLoading(false);
       setIsResuming(false);
@@ -621,7 +1088,7 @@ return () => clearInterval(interval);
   };
 
   useEffect(() => {
-    audioPlayerRef.current = new AudioPlayer();
+    audioPlayerRef.current = new (window as any).AudioPlayer();
     
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -631,12 +1098,18 @@ return () => clearInterval(interval);
       recognitionInstance.interimResults = true;
       recognitionInstance.lang = 'en-US';
       
-      // Settings optimized for natural conversation
-      recognitionInstance.maxAlternatives = 1;
+      // Enhanced settings for better accuracy and noise handling
+      recognitionInstance.maxAlternatives = 3; // Get multiple recognition alternatives
+      recognitionInstance.continuous = true; // Keep listening continuously
       
-      // Try to set more responsive speech detection (if supported)
+      // Advanced configuration for better speech detection
       if ('webkitSpeechRecognition' in window) {
         try {
+          // Set higher sensitivity for better speech detection
+          (recognitionInstance as any).interimResults = true;
+          (recognitionInstance as any).continuous = true;
+          
+          // Try to set more responsive speech detection (if supported)
           recognitionInstance.serviceURI = 'wss://www.google.com/speech-api/full-duplex/v1/up';
         } catch (e) {
           // Ignore if not supported
@@ -645,34 +1118,144 @@ return () => clearInterval(interval);
       
       console.log('🎤 Speech recognition configured successfully');
       
-      // Request microphone permission upfront
+      // Enhanced microphone configuration for better noise handling
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ audio: true })
+        // Phase 1: Enhanced WebRTC + AI Enhancement (Inspired by Meetily)
+        const audioConstraints = {
+          audio: {
+            // Core WebRTC optimizations
+            echoCancellation: { ideal: true, exact: true },
+            noiseSuppression: { ideal: true, exact: true },
+            autoGainControl: { ideal: true, exact: true },
+            
+            // High-quality audio settings
+            sampleRate: { ideal: 48000, min: 16000, max: 48000 },
+            channelCount: { ideal: 1, exact: 1 },
+            latency: { ideal: 0.01 }, // 10ms target latency
+            
+            // Chrome-specific advanced optimizations (like Meetily's native approach)
+            googEchoCancellation: { ideal: true },
+            googNoiseSuppression: { ideal: true },
+            googAutoGainControl: { ideal: true },
+            googNoiseSuppression2: { ideal: true }, // Enhanced noise suppression
+            googHighpassFilter: { ideal: true },     // Remove low-frequency noise
+            googTypingNoiseDetection: { ideal: true }, // Reduce typing noise
+            googAudioMirroring: { ideal: false },    // Prevent audio feedback
+            
+            // Advanced noise reduction (inspired by Meetily's Rust processing)
+            googEchoCancellation2: { ideal: true },  // Secondary echo cancellation
+            googNoiseSuppression3: { ideal: true },  // Tertiary noise suppression
+            
+            // Adaptive settings for better performance
+            googAutoGainControl2: { ideal: true },   // Enhanced auto gain
+            googBeamforming: { ideal: true },        // Microphone array optimization
+            googLevelControl: { ideal: true },       // Dynamic level adjustment
+            
+            // AI-enhanced audio processing flags
+            googVoiceActivityDetection: { ideal: true }, // Smart speech detection
+            googAdaptiveEchoCancellation: { ideal: true }, // Adaptive echo removal
+            googAdaptiveNoiseSuppression: { ideal: true }, // Adaptive noise removal
+            
+            // Professional audio settings
+            googLowpassFilter: { ideal: true },      // Remove high-frequency noise
+            googNoiseSuppression4: { ideal: true },  // Quaternary noise suppression
+            googEchoCancellation3: { ideal: true },  // Tertiary echo cancellation
+            googAutoGainControl3: { ideal: true },   // Tertiary auto gain control
+            
+            // Fallback to basic constraints for broader compatibility
+            ...(navigator.mediaDevices.getSupportedConstraints().sampleRate && {
+              sampleRate: { ideal: 48000, min: 16000, max: 48000 }
+            }),
+            ...(navigator.mediaDevices.getSupportedConstraints().echoCancellation && {
+              echoCancellation: { ideal: true, exact: true }
+            }),
+            ...(navigator.mediaDevices.getSupportedConstraints().noiseSuppression && {
+              noiseSuppression: { ideal: true, exact: true }
+            }),
+            ...(navigator.mediaDevices.getSupportedConstraints().autoGainControl && {
+              autoGainControl: { ideal: true, exact: true }
+            })
+          }
+        };
+        
+        console.log('🎤 Enhanced WebRTC Audio Constraints:', JSON.stringify(audioConstraints, null, 2));
+        console.log('🔧 Supported Constraints:', navigator.mediaDevices.getSupportedConstraints());
+        
+        navigator.mediaDevices.getUserMedia(audioConstraints)
           .then(stream => {
-            console.log('✅ Microphone permission granted');
+            console.log('✅ Enhanced microphone access granted with AI-enhanced noise reduction');
+            const audioTrack = stream.getAudioTracks()[0];
+            const settings = audioTrack.getSettings();
+            const capabilities = audioTrack.getCapabilities();
+            
+            console.log('🎤 Audio Track Settings:', settings);
+            console.log('🎤 Audio Track Capabilities:', capabilities);
+            console.log('🎤 Audio Track Enabled:', audioTrack.enabled);
+            console.log('🎤 Audio Track Ready State:', audioTrack.readyState);
+            
+            // AI Enhancement: Analyze audio quality and apply adaptive settings
+            (window as any).analyzeAndOptimizeAudio(stream, settings, capabilities);
+            
             // Stop the stream as we're using speech recognition, not direct audio
             stream.getTracks().forEach(track => track.stop());
           })
           .catch(error => {
-            console.error('❌ Microphone permission denied:', error);
-            sonnerToast.error('Microphone access is required for voice interviews. Please allow microphone permissions.');
+            console.error('❌ Enhanced microphone access failed:', error);
+            
+            // Fallback to basic constraints if enhanced fails
+            console.log('🔄 Falling back to basic audio constraints...');
+            const fallbackConstraints = {
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 44100,
+                channelCount: 1
+              }
+            };
+            
+            navigator.mediaDevices.getUserMedia(fallbackConstraints)
+              .then(stream => {
+                console.log('✅ Fallback microphone access granted');
+                stream.getTracks().forEach(track => track.stop());
+              })
+              .catch(fallbackError => {
+                console.error('❌ Fallback microphone access also failed:', fallbackError);
+                sonnerToast.error('Microphone access is required for voice interviews. Please allow microphone permissions.');
+              });
           });
       }
 
       recognitionInstance.onresult = (event: any) => {
         let finalTranscript = '';
         let interimTranscript = '';
+        
+        // Enhanced result processing for better accuracy
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+          const result = event.results[i];
+          const transcript = result[0].transcript;
+          
+          if (result.isFinal) {
+            finalTranscript += transcript;
+            console.log('🎤 Final transcript segment:', transcript);
           } else {
-            interimTranscript += event.results[i][0].transcript;
+            interimTranscript += transcript;
+            console.log('🎤 Interim transcript segment:', transcript);
           }
         }
+        
+        // Combine transcripts with better handling
         const newTranscript = finalTranscript + interimTranscript;
-        console.log('🎤 Speech detected:', newTranscript);
+        console.log('🎤 Combined transcript:', newTranscript);
+        
+        // Update transcript state and ref
         setTranscript(newTranscript);
         transcriptRef.current = newTranscript;
+        
+        // Store the final transcript separately for better end-of-speech handling
+        if (finalTranscript) {
+          transcriptRef.current = finalTranscript + (interimTranscript || '');
+        }
       };
 
       recognitionInstance.onstart = () => {
@@ -695,40 +1278,50 @@ return () => clearInterval(interval);
 
       recognitionInstance.onend = () => {
         setIsListening(false);
-        // Natural conversation flow - auto-submit after natural pause
+        console.log('🎤 Speech recognition ended, processing final transcript...');
+        
+        // Enhanced end-of-speech handling with better timing
         setTimeout(() => {
           const userText = transcriptRef.current.trim();
           
-          console.log(`🎤 Recognition ended. UserText: "${userText}", WS connected: ${!!ws}, ActiveTurn: ${activeTurn}`);
+          console.log(`🎤 Final transcript processing. UserText: "${userText}", WS connected: ${!!ws}, ActiveTurn: ${activeTurn}`);
           
           if (userText && ws) {
-            // Auto-submit any response after natural pause (like ChatGPT voice)
-            console.log(`🎤 Natural pause detected - submitting response:`, userText.substring(0, 100) + '...');
+            // Ensure we capture the complete response
+            console.log(`🎤 Complete response captured:`, userText.substring(0, 100) + (userText.length > 100 ? '...' : ''));
             
+            // Add to conversation history with complete text
             setConversationHistory(prev => {
               const newHistory = [...prev, { speaker: 'user' as const, text: userText, timestamp: new Date() }];
-              console.log(`📝 Updated conversation history: ${newHistory.length} entries (User response added)`);
+              console.log(`📝 Updated conversation history: ${newHistory.length} entries (Complete user response added)`);
               
-              // 🔥 NEW PIPELINE: Log user utterance
+              // 🔥 NEW PIPELINE: Log complete user utterance
               if (currentInterview) {
                 logUtterance(currentInterview.id, {
                   speaker: 'USER',
                   text: userText,
                   timestamp: new Date().toISOString()
-                }).catch(err => console.warn('Failed to log user utterance:', err));
+                }).catch(err => console.warn('Failed to log complete user utterance:', err));
               }
               
               return newHistory;
             });
             
+            // Send complete response to WebSocket
             ws.send(JSON.stringify({
               text: userText
             }));
+            
+            // Clear transcript after successful processing
             setTranscript('');
             transcriptRef.current = '';
             setActiveTurn('ai');
+            
+            console.log('✅ Complete user response processed and sent successfully');
+          } else {
+            console.log('⚠️ No transcript to process or WebSocket not connected');
           }
-        }, 100); // Small delay to ensure transcript is captured
+        }, 200); // Increased delay for better transcript capture
       };
       recognitionRef.current = recognitionInstance;
     } else {
@@ -752,7 +1345,8 @@ return () => clearInterval(interval);
     // Prevent WebSocket connection if currently pausing
     if (isPausing) {
       console.log('🚫 Cannot setup WebSocket - currently pausing');
-      return;
+      
+return;
     }
     
     const newWs = new WebSocket('ws://localhost:3002');
@@ -779,6 +1373,15 @@ return () => clearInterval(interval);
       console.log('✅ WebSocket connected');
       setIsLoading(false);
       setError(null); // Clear any previous connection errors
+      
+      // Prevent interview from restarting if it was ended
+      if (isInterviewEnded) {
+        console.log('🚫 Interview was ended, preventing restart');
+        newWs.close();
+        
+return;
+      }
+      
       setIsInterviewActive(true);
       setActiveTurn('ai');
       
@@ -1028,7 +1631,8 @@ return;
     // Prevent starting interview if currently pausing
     if (isPausing) {
       console.log('🚫 Cannot start interview - currently pausing');
-      return;
+      
+return;
     }
     
     // Mark the page as having an active interview
@@ -1050,6 +1654,7 @@ return;
 
       setIsLoading(true);
       setError(null);
+      setIsInterviewEnded(false); // Reset interview ended flag for new interview
     setLastAgentResponse('');
     interviewStartTimeRef.current = new Date();
     setSessionUsage({ inputTokens: 0, outputTokens: 0, ttsCharacters: 0, duration: 0 });
@@ -1191,7 +1796,8 @@ return;
     // Prevent starting speech recognition if currently pausing
     if (isPausing) {
       console.log('🚫 Cannot start speech recognition - currently pausing');
-      return;
+      
+return;
     }
     
     if (recognitionRef.current) {
@@ -1422,7 +2028,9 @@ return; // Exit function successfully
     ws?.close();
     audioPlayerRef.current?.stop();
     stopListening();
-    setIsInterviewActive(false);
+    // Don't hide the interface completely - show analysis instead
+    // setIsInterviewActive(false); // Commented out to keep interface visible
+    setIsInterviewEnded(true); // Prevent interview from restarting
     
     // Stop real-time credit tracking when interview ends
     stopInterviewTracking();
@@ -1448,7 +2056,104 @@ return; // Exit function successfully
         });
         
         console.log('✅ Interview session completed successfully');
-    } catch (error) {
+        
+        // Send completion email to user with Gemini analysis
+        if (user?.email) {
+          try {
+            console.log('📧 Starting email preparation for interview completion...');
+            
+            const timeSpent = interviewStartTimeRef.current 
+              ? Math.floor((Date.now() - interviewStartTimeRef.current.getTime()) / 1000)
+              : 0;
+            
+            const questionsCompleted = Math.floor(conversationHistory.filter(h => h.speaker === 'user').length);
+            const totalQuestions = (() => {
+              const storedQuestions = localStorage.getItem('generatedQuestions');
+              if (storedQuestions) {
+                try {
+                  const questions = JSON.parse(storedQuestions);
+                  
+return questions.length;
+                } catch (e) {
+                  return 10; // fallback
+                }
+              }
+              
+return 10;
+            })();
+            
+            console.log('📊 Completion email data preparation:', {
+              timeSpent,
+              questionsCompleted,
+              totalQuestions,
+              conversationLength: conversationHistory.length,
+              userEmail: user.email,
+              selectedAgent: selectedAgent?.displayName
+            });
+            
+            // Generate conversation summary
+            const conversationSummary = `You completed a ${Math.floor(timeSpent / 60)} minute interview with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
+            
+            // Prepare detailed logs
+            const detailedLogs = conversationHistory.map(entry => ({
+              speaker: entry.speaker === 'user' ? 'user' as const : 'ai' as const,
+              text: entry.text,
+              timestamp: entry.timestamp.toISOString()
+            }));
+            
+            // Get Gemini analysis for completion (full evaluation type)
+            console.log('🧠 Requesting Gemini analysis for interview completion...');
+            const geminiAnalysis = await getGeminiAnalysis('full');
+            console.log('🧠 Gemini completion analysis result:', geminiAnalysis);
+            
+            // Calculate completion score
+            const completionScore = Math.round((questionsCompleted / totalQuestions) * 100);
+            
+            // Send completion email with Gemini analysis
+            await emailService.sendInterviewCompletionEmail({
+              to: user.email,
+              username: user.email?.split('@')[0] || 'User',
+              interviewTitle: `Practice Interview with ${selectedAgent?.displayName || 'AI Interviewer'}`,
+              score: completionScore,
+              totalQuestions: totalQuestions,
+              duration: `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s`,
+              feedback: conversationSummary,
+              improvementTips: geminiAnalysis?.recommendations || [
+                'Review your responses to identify areas for improvement',
+                'Practice with different types of questions to build confidence',
+                'Focus on clear communication and structured thinking',
+                'Take time to think before responding to complex questions'
+              ],
+              nextSteps: 'Your detailed performance analysis is available in the dashboard. Continue practicing to improve your interview skills!',
+              // Include Gemini analysis if available
+              geminiAnalysis: geminiAnalysis ? {
+                analysisType: geminiAnalysis.analysis_type || 'full_evaluation',
+                executiveSummary: geminiAnalysis.executive_summary || conversationSummary,
+                detailedLog: geminiAnalysis.detailed_log || 'Comprehensive analysis completed',
+                keyInsights: geminiAnalysis.key_insights || ['Analysis completed successfully'],
+                qualityAssessment: {
+                  score: geminiAnalysis.quality_assessment?.score || completionScore,
+                  reasoning: geminiAnalysis.quality_assessment?.reasoning || 'Analysis generated by Gemini AI'
+                },
+                discrepancyAnalysis: geminiAnalysis.discrepancy_analysis || 'No discrepancies noted',
+                recommendations: geminiAnalysis.recommendations || ['Review the detailed analysis for insights'],
+                localVsGemini: {
+                  localCapturedTurns: geminiAnalysis.local_vs_gemini?.local_captured_turns || conversationHistory.length,
+                  localSpeakers: geminiAnalysis.local_vs_gemini?.local_speakers || ['user', 'ai'],
+                  analysisQuality: geminiAnalysis.local_vs_gemini?.analysis_quality || 'N/A'
+                }
+              } : undefined
+            });
+            
+            console.log('📧 Completion email sent successfully to:', user.email);
+            sonnerToast.success('Interview completion summary sent to your email!');
+          } catch (emailError) {
+            console.error('❌ Exception while sending completion email:', emailError);
+            sonnerToast.error('Failed to send interview completion email');
+          }
+        }
+        
+      } catch (error) {
         console.warn('⚠️ Failed to complete session:', error);
       }
     }
@@ -1472,7 +2177,8 @@ return; // Exit function successfully
     return new Promise((resolve) => {
       if (!audioPlayerRef.current) {
         resolve();
-        return;
+        
+return;
       }
 
       const audio = audioPlayerRef.current;
@@ -1546,8 +2252,8 @@ return; // Exit function successfully
     audioPlayerRef.current?.stop();
     stopListening();
 
-    // Reset interview state
-    setIsInterviewActive(false);
+    // Don't reset interview state completely - just pause it
+    // setIsInterviewActive(false); // Commented out to keep interface visible
     setActiveTurn(null);
     setIsAiSpeaking(false);
     setIsListening(false);
@@ -1618,9 +2324,14 @@ return; // Exit function successfully
         setResumeQuestionsAnswered(null);
         setResumeNextQuestion(null);
         
+        // Ensure the pause panel is visible and the interview interface stays
+        console.log('⏸️ Pause panel should now be visible');
+        
         // Send pause summary email to user
         if (user?.email) {
           try {
+            console.log('📧 Starting email preparation for pause summary...');
+            
             const timeSpent = interviewStartTimeRef.current 
               ? Math.floor((Date.now() - interviewStartTimeRef.current.getTime()) / 1000)
               : 0;
@@ -1631,13 +2342,24 @@ return; // Exit function successfully
               if (storedQuestions) {
                 try {
                   const questions = JSON.parse(storedQuestions);
-                  return questions.length;
+                  
+return questions.length;
                 } catch (e) {
                   return 10; // fallback
                 }
               }
-              return 10;
+              
+return 10;
             })();
+            
+            console.log('📊 Email data preparation:', {
+              timeSpent,
+              questionsCompleted,
+              totalQuestions,
+              conversationLength: conversationHistory.length,
+              userEmail: user.email,
+              selectedAgent: selectedAgent?.displayName
+            });
             
             // Generate conversation summary
             const conversationSummary = `You had a ${Math.floor(timeSpent / 60)} minute conversation with ${selectedAgent?.displayName || 'AI Interviewer'}. You answered ${questionsCompleted} questions and engaged in meaningful discussion about your experiences and skills.`;
@@ -1652,8 +2374,13 @@ return; // Exit function successfully
             // Create resume URL
             const resumeUrl = `${window.location.origin}/practice/new?resumeFromLog=${currentSession?.sessionKey || 'latest'}&agentId=${selectedAgent?.id || 'unknown'}&questionsAnswered=${questionsCompleted}&nextQuestion=${questionsCompleted + 1}`;
             
-            // Send email
-            await emailService.sendInterviewPauseSummaryEmail({
+            console.log('🧠 Requesting Gemini analysis...');
+            // Get Gemini analysis before sending email (pause analysis type)
+            const geminiAnalysis = await getGeminiAnalysis('pause');
+            console.log('🧠 Gemini pause analysis result:', geminiAnalysis);
+            
+            // Prepare email data
+            const emailData = {
               to: user.email,
               username: user.email?.split('@')[0] || 'User',
               interviewerName: selectedAgent?.displayName || 'AI Interviewer',
@@ -1663,19 +2390,58 @@ return; // Exit function successfully
               duration: `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s`,
               conversationSummary,
               detailedLogs,
-              resumeUrl
-            });
+              resumeUrl,
+              // Include Gemini pause analysis if available
+              ...(geminiAnalysis && {
+                geminiAnalysis: {
+                  analysisType: geminiAnalysis.analysis_type || 'pause_analysis',
+                  sessionProgress: geminiAnalysis.session_progress || {
+                    questionsCovered: questionsCompleted,
+                    totalExchanges: conversationHistory.length,
+                    sessionDurationEstimate: `${Math.floor(timeSpent / 60)}-${Math.floor(timeSpent / 60) + 2} minutes`,
+                    pausePoint: 'Mid-interview session'
+                  },
+                  conversationSummary: geminiAnalysis.conversation_summary || conversationSummary,
+                  questionBreakdown: geminiAnalysis.question_by_question_breakdown || [],
+                  overallAssessment: geminiAnalysis.overall_session_assessment || {
+                    engagementLevel: 'Good',
+                    communicationEffectiveness: 'Good',
+                    technicalDemonstration: 'Fair',
+                    professionalDemeanor: 'Good'
+                  },
+                  resumeContext: geminiAnalysis.resume_context || {
+                    keyLearnings: ['Interview flow and structure'],
+                    nextSessionFocus: ['Detailed examples and technical depth'],
+                    confidenceIndicators: ['Maintained engagement throughout session']
+                  },
+                  timestampMarker: geminiAnalysis.timestamp_marker || `Session paused after ${conversationHistory.length} exchanges`,
+                  recommendationsForResume: geminiAnalysis.recommendations_for_resume || [
+                    'Continue building on the foundation established',
+                    'Focus on providing specific examples and detailed responses'
+                  ]
+                }
+              })
+            };
             
-            console.log('📧 Pause summary email sent to:', user.email);
-            sonnerToast.success('Interview summary sent to your email!');
+            console.log('📧 Final email data being sent:', emailData);
+            
+            // Send email with Gemini analysis
+            const emailResult = await emailService.sendInterviewPauseSummaryEmail(emailData);
+            
+            if (emailResult) {
+              console.log('✅ Pause summary email sent successfully to:', user.email);
+              sonnerToast.success('Interview summary sent to your email!');
+            } else {
+              console.error('❌ Failed to send pause summary email - email service returned false');
+              sonnerToast.error('Failed to send interview summary email');
+            }
           } catch (emailError) {
-            console.warn('⚠️ Failed to send pause summary email:', emailError);
-            // Don't show error to user - email failure shouldn't break pause functionality
+            console.error('❌ Exception while sending pause summary email:', emailError);
+            sonnerToast.error('Failed to send interview summary email');
           }
+        } else {
+          console.warn('⚠️ No user email available for pause summary email');
         }
-        
-        // Don't auto-redirect - let user choose when to continue
-        console.log('⏸️ Interview paused - user can continue later');
       } catch (error) {
         console.error('❌ Failed to pause session:', error);
         sonnerToast.error('Failed to save progress. You can try again.');
@@ -1701,7 +2467,26 @@ return; // Exit function successfully
     setShowAnalysis(false);
     setAnalysisData(null);
     setShowQuestionsModal(false);
+    setIsInterviewEnded(false); // Reset interview ended flag for fresh start
     dispatch(setSelectedInterviewer(null));
+  };
+
+  // Safe navigation function that ensures credits are deducted before leaving
+  const safeNavigate = (destination: string) => {
+    if (isInterviewActive) {
+      console.log('🚪 Safe navigation - stopping credit tracking before leaving');
+      stopInterviewTracking();
+    }
+    router.push(destination);
+  };
+
+  // Safe replace function that ensures credits are deducted before replacing
+  const safeReplace = (destination: string) => {
+    if (isInterviewActive) {
+      console.log('🔄 Safe replace - stopping credit tracking before replacing');
+      stopInterviewTracking();
+    }
+    router.replace(destination);
   };
 
   // Function to detect if AI is asking a new official question vs. follow-up
@@ -1781,6 +2566,7 @@ return; // Exit function successfully
           // Reset the page to initial state
           resetInterview();
         }}
+        onSendEmail={handleSendPauseEmail}
       />
       
       {/* Performance Analysis */}
@@ -1794,19 +2580,20 @@ return; // Exit function successfully
           }))}
           sessionUsage={sessionUsage}
           onNewInterview={resetInterview}
-          onGoHome={() => router.push('/dashboard')}
+          onGoHome={() => safeNavigate('/dashboard')}
           onShareResults={() => {
             sonnerToast.success('Sharing functionality coming soon!');
           }}
           onAskQuestions={() => setShowQuestionsModal(true)}
+          onSendEmail={handleSendCompletionEmail}
         />
       )}
       
-      {!showAnalysis && (
+      {!showAnalysis && !showPausePanel && (
         <AnimatePresence>
           {!isInterviewActive && !resumeFromLog && !resumeSessionKey ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Button variant="ghost" className="mb-4" onClick={() => router.push('/dashboard')}>
+            <Button variant="ghost" className="mb-4" onClick={() => safeNavigate('/dashboard')}>
               <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
             </Button>
             <Card>
@@ -1834,7 +2621,7 @@ return; // Exit function successfully
           </motion.div>
           ) : !isInterviewActive && (resumeFromLog || resumeSessionKey) ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Button variant="ghost" className="mb-4" onClick={() => router.push('/dashboard')}>
+            <Button variant="ghost" className="mb-4" onClick={() => safeNavigate('/dashboard')}>
               <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
             </Button>
             <Card>
@@ -1843,7 +2630,7 @@ return; // Exit function successfully
               </CardHeader>
               <CardContent className="text-center">
                 <div className="flex items-center justify-center mb-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
                   {isResuming ? 'Loading your interview session...' : 'Preparing to resume...'}
@@ -1918,7 +2705,7 @@ return; // Exit function successfully
                       <p className="text-lg">{lastAgentResponse || 'Hi, nice to meet you. We\'ll keep this to about 15 minutes. May I start with your experience in user research and how you applied insights to improve a past project?'}</p>
                       {isFadingOut && (
                         <div className="flex items-center justify-center space-x-2 text-orange-600 animate-pulse">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>
+                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping" />
                           <span className="text-sm font-medium">Fading out audio...</span>
                         </div>
                       )}

@@ -117,3 +117,71 @@ export interface InterviewDetails {
 }
 
 export interface Interview extends InterviewBase, InterviewDetails {}
+
+// TypeScript types for the new interview schema
+// This matches the Supabase interviews table structure
+
+export interface InterviewTranscriptEntry {
+  role: 'interviewer' | 'candidate';
+  content: string;
+  timestamp: string; // ISO 8601 timestamp
+}
+
+export interface InterviewRecord {
+  id: string;
+  candidate_id: string;
+  job_role_id: string;
+  transcript: InterviewTranscriptEntry[];
+  interview_start_time: string; // ISO 8601 timestamp
+  interview_end_time?: string; // ISO 8601 timestamp, null if ongoing
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateInterviewRequest {
+  candidate_id: string;
+  job_role_id: string;
+  transcript: InterviewTranscriptEntry[];
+  interview_start_time: string;
+  interview_end_time?: string;
+}
+
+export interface UpdateInterviewRequest {
+  transcript?: InterviewTranscriptEntry[];
+  interview_end_time?: string;
+}
+
+// Helper types for the existing conversation history format
+export interface ConversationHistoryEntry {
+  speaker: 'user' | 'ai';
+  text: string;
+  timestamp: Date;
+}
+
+// Utility function to convert conversation history to transcript format
+export function convertConversationHistoryToTranscript(
+  conversationHistory: ConversationHistoryEntry[],
+  interviewerName: string = 'AI Interviewer'
+): InterviewTranscriptEntry[] {
+  return conversationHistory.map(entry => ({
+    role: entry.speaker === 'user' ? 'candidate' : 'interviewer',
+    content: entry.text,
+    timestamp: entry.timestamp.toISOString()
+  }));
+}
+
+// Utility function to validate transcript structure
+export function validateTranscript(transcript: any): transcript is InterviewTranscriptEntry[] {
+  if (!Array.isArray(transcript)) return false;
+  if (transcript.length === 0) return false;
+  
+  return transcript.every(entry => 
+    typeof entry === 'object' &&
+    entry !== null &&
+    (entry.role === 'interviewer' || entry.role === 'candidate') &&
+    typeof entry.content === 'string' &&
+    entry.content.length > 0 &&
+    typeof entry.timestamp === 'string' &&
+    !isNaN(Date.parse(entry.timestamp))
+  );
+}

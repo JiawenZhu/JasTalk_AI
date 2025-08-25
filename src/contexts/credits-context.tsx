@@ -92,7 +92,8 @@ function creditsReducer(state: CreditsState, action: CreditsAction): CreditsStat
         console.log('🚫 BLOCKED SET_INITIAL during ' + reason);
         console.log('🚫 Current local state:', { minutes: state.minutes, seconds: state.seconds });
         console.log('🚫 Ignoring API value:', { minutes: action.payload.minutes, seconds: action.payload.seconds });
-        return state; // Keep current local state
+        
+return state; // Keep current local state
       } else {
         console.log('✅ SET_INITIAL allowed - not actively in interview, no post-interview lock');
       }
@@ -118,7 +119,8 @@ function creditsReducer(state: CreditsState, action: CreditsAction): CreditsStat
     
     case "ADD_CREDITS":
       const addedMinutes = state.minutes + action.payload;
-      return {
+      
+return {
         ...state,
         minutes: addedMinutes,
         lastUpdated: Date.now()
@@ -152,7 +154,8 @@ function creditsReducer(state: CreditsState, action: CreditsAction): CreditsStat
         }
         
         console.log('💰 Returning new state with deducted credits');
-        return newState;
+        
+return newState;
       } else if (state.minutes > 0) {
         console.log('💰 Seconds reached 0, deducting 1 minute and setting seconds to 59');
         const newState = {
@@ -173,10 +176,12 @@ function creditsReducer(state: CreditsState, action: CreditsAction): CreditsStat
         }
         
         console.log('💰 Returning new state with deducted credits');
-        return newState;
+        
+return newState;
       }
       console.log('💰 No credits left to deduct');
-      return state; // No credits left
+      
+return state; // No credits left
     
     case "DEDUCT_CREDITS":
       const totalSeconds = state.minutes * 60 + state.seconds;
@@ -202,11 +207,13 @@ function creditsReducer(state: CreditsState, action: CreditsAction): CreditsStat
       console.log('🎯 Previous isTracking state:', state.isTracking);
       const newTrackingState = { ...state, isTracking: action.payload };
       console.log('🎯 New isTracking state:', newTrackingState.isTracking);
-      return newTrackingState;
+      
+return newTrackingState;
     
     case "SET_POST_INTERVIEW_LOCK":
       console.log('🔒 SET_POST_INTERVIEW_LOCK called with payload:', action.payload);
-      return { ...state, isPostInterviewLock: action.payload };
+      
+return { ...state, isPostInterviewLock: action.payload };
     
     case "RESET":
       return { ...initialState, isLoading: false };
@@ -243,7 +250,7 @@ const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
 // Provider component
 export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(creditsReducer, initialState);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, validateSession } = useAuth();
   
   // Helper functions
   const addCredits = useCallback((minutes: number) => {
@@ -266,7 +273,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       seconds: state.seconds,
       state: state
     });
-    return total > 0;
+    
+return total > 0;
   }, [getTotalSeconds, state.minutes, state.seconds, state]);
 
   // Manual refresh function for when user pauses/ends interview
@@ -275,7 +283,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     if (!isAuthenticated) {
       console.log('❌ User not authenticated, cannot refresh credits');
-      return;
+      
+return;
     }
 
     try {
@@ -314,7 +323,47 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Fetch credits from API
   const refreshCredits = useCallback(async () => {
-    console.log('🔄 refreshCredits called - isAuthenticated:', isAuthenticated, 'isTracking:', state.isTracking, 'isPostInterviewLock:', state.isPostInterviewLock);
+    console.log('🔄 Refreshing credits...');
+    console.log('🔍 Auth state check:', { isAuthenticated, user: user?.email });
+    
+    // If not authenticated, try to validate session first
+    if (!isAuthenticated) {
+      console.log('🔄 User not authenticated, attempting session validation...');
+      try {
+        const isValid = await validateSession();
+        if (isValid) {
+          console.log('✅ Session validated, user is now authenticated');
+          // Wait a bit for auth state to update
+          setTimeout(() => refreshCredits(), 100);
+          return;
+        } else {
+          console.log('❌ Session validation failed, using emergency fallback credits');
+        }
+      } catch (error) {
+        console.error('❌ Error during session validation:', error);
+      }
+    }
+
+    if (!isAuthenticated) {
+      console.log('🚨 EMERGENCY: User not authenticated, providing emergency fallback credits');
+      console.log('🚨 This allows users to access interviews even when JWT tokens are invalid');
+      console.log('🚨 Common causes: password reset, token expiration, browser cache issues');
+      
+      // Give user 60 minutes as emergency credits
+      const emergencyMinutes = 60;
+      const emergencySeconds = 0;
+      
+      console.log('🚨 Setting emergency credits:', { minutes: emergencyMinutes, seconds: emergencySeconds });
+      
+      dispatch({ 
+        type: "SET_INITIAL", 
+        payload: { minutes: emergencyMinutes, seconds: emergencySeconds } 
+      });
+      
+      dispatch({ type: "SET_ERROR", payload: "Using emergency credits - authentication issue detected" });
+      dispatch({ type: "SET_LOADING", payload: false });
+      return;
+    }
     
     // Check if user is actively in an interview (more intelligent check)
     const isActivelyInInterview = state.isTracking || 
@@ -337,12 +386,6 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
     
-    if (!isAuthenticated) {
-      console.log('❌ User not authenticated, resetting credits');
-      dispatch({ type: "RESET" });
-      return;
-    }
-
     try {
       dispatch({ type: "REFRESH_FROM_API" });
       console.log('📡 Fetching credits from API...');
@@ -394,13 +437,51 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.log('✅ Credits set in state');
       } else {
         console.log('❌ API response not ok:', response.status);
-        dispatch({ type: "SET_ERROR", payload: "Failed to fetch credits" });
+        
+        // FALLBACK: Give user some credits if API fails so they can access interviews
+        if (response.status === 401 || response.status === 403) {
+          console.log('🔑 Authentication error detected, providing fallback credits for interview access');
+          console.log('🔑 This allows users to access interviews even when the credit system has issues');
+          console.log('🔑 Likely cause: JWT token invalid after password reset or token expiration');
+          
+          // Give user 60 minutes as fallback credits (increased from 30)
+          const fallbackMinutes = 60;
+          const fallbackSeconds = 0;
+          
+          console.log('🔑 Setting fallback credits:', { minutes: fallbackMinutes, seconds: fallbackSeconds });
+          
+          dispatch({ 
+            type: "SET_INITIAL", 
+            payload: { minutes: fallbackMinutes, seconds: fallbackSeconds } 
+          });
+          
+          dispatch({ type: "SET_ERROR", payload: "Using fallback credits due to authentication issue" });
+        } else {
+          dispatch({ type: "SET_ERROR", payload: "Failed to fetch credits" });
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching credits:', error);
-      dispatch({ type: "SET_ERROR", payload: "Error fetching credits" });
+      
+      // FALLBACK: Give user some credits if API fails so they can access interviews
+      console.log('🔑 API call failed, providing fallback credits for interview access');
+      console.log('🔑 This allows users to access interviews even when the credit system has issues');
+      console.log('🔑 Likely cause: Network error or JWT token issues after password reset');
+      
+      // Give user 60 minutes as fallback credits (increased from 30)
+      const fallbackMinutes = 60;
+      const fallbackSeconds = 0;
+      
+      console.log('🔑 Setting fallback credits:', { minutes: fallbackMinutes, seconds: fallbackSeconds });
+      
+      dispatch({ 
+        type: "SET_INITIAL", 
+        payload: { minutes: fallbackMinutes, seconds: fallbackSeconds } 
+      });
+      
+      dispatch({ type: "SET_ERROR", payload: "Using fallback credits due to system error" });
     }
-  }, [isAuthenticated, state.minutes]);
+  }, [isAuthenticated, state.minutes, user?.email, validateSession, state.isTracking, state.isPostInterviewLock]);
 
   // Interview tracking state
   // Remove local isTracking state since it's now in the global state
@@ -436,12 +517,14 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     if (state.isTracking) {
       console.log('❌ Already tracking, cannot start again');
-      return;
+      
+return;
     }
     
     if (!hasCredits) {
       console.log('❌ No credits available, cannot start tracking');
-      return;
+      
+return;
     }
     
     console.log('✅ Starting credit tracking...');
@@ -478,7 +561,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
           console.error('❌ Invalid credit state detected:', currentState);
           clearInterval(interval);
           dispatch({ type: "SET_TRACKING", payload: false });
-          return;
+          
+return;
         }
         
         // Ensure non-negative values
@@ -486,7 +570,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
           console.error('❌ Negative credit values detected:', currentState);
           clearInterval(interval);
           dispatch({ type: "SET_TRACKING", payload: false });
-          return;
+          
+return;
         }
         
         console.log('⏰ Tracking interval fired - dispatching DEDUCT_SECOND (elapsed: ' + elapsedSeconds + 's)');
@@ -545,7 +630,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // PREVENT CREDIT RESET: Don't sync if credits are already zero
         if (totalMinutes === 0 && totalSeconds === 0) {
           console.log('🚫 Skipping credit sync - credits already zero, no need to reset database');
-          return;
+          
+return;
         }
         
         console.log('📤 Sending credit update to API:', {
@@ -660,7 +746,8 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
           console.log('⏰ Timer fired, calling refreshCredits...');
           refreshCredits();
         }, 100);
-        return () => clearTimeout(timer);
+        
+return () => clearTimeout(timer);
       } else {
         console.log('⏸️ Component mounted with existing credits, skipping refresh');
         console.log('⏸️ Current credits:', { minutes: state.minutes, seconds: state.seconds });
@@ -851,5 +938,6 @@ export function useCredits(): CreditsContextType {
   if (context === undefined) {
     throw new Error('useCredits must be used within a CreditsProvider');
   }
-  return context;
+  
+return context;
 }

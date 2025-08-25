@@ -10,7 +10,6 @@ import AnimatedInterviewBanner from "@/components/AnimatedInterviewBanner";
 import { 
   CloudArrowUpIcon, 
   DocumentTextIcon, 
-  ClockIcon, 
   ChartBarIcon,
   MicrophoneIcon,
   TrashIcon,
@@ -19,8 +18,9 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "@/components/ui/use-toast";
 import { useInterviewSession } from "@/hooks/use-interview-session";
-import { analyzeInterviewProgress, canResumeInterview, type QuestionProgress } from '@/lib/conversation-analysis';
+
 import CreditsDisplay from "@/components/CreditsDisplay";
+import AuthenticationRecovery from "@/components/AuthenticationRecovery";
 
 interface VoiceAgent {
   agent_id: string;
@@ -43,6 +43,20 @@ interface PracticeSession {
   status?: string;
 }
 
+interface UserInvoice {
+  id: string;
+  user_id: string;
+  stripe_invoice_id: string;
+  package_id: string;
+  package_name: string;
+  credits: number;
+  amount: number;
+  status: string;
+  invoice_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
@@ -60,9 +74,7 @@ export default function Dashboard() {
     loading: sessionsLoading 
   } = useInterviewSession();
   
-  // Conversation logs for resume functionality
-  const [conversationLogs, setConversationLogs] = useState<any[]>([]);
-  const [resumeInfo, setResumeInfo] = useState<{agentId: string; agentName: string; progress: QuestionProgress; logId: string} | null>(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSessions, setTotalSessions] = useState(0);
   const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
@@ -74,9 +86,18 @@ export default function Dashboard() {
 
   // Credit state is now managed by CreditsDisplay component
 
+  // Invoice state
+  const [showInvoices, setShowInvoices] = useState(false);
+  const [invoices, setInvoices] = useState<UserInvoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+
   // Deletion confirmation modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{ type: 'single' | 'bulk'; sessionId?: string; itemName?: string } | null>(null);
+
+  // Authentication recovery state
+  const [showAuthRecovery, setShowAuthRecovery] = useState(false);
+  const [authRecoveryLoading, setAuthRecoveryLoading] = useState(false);
 
   const openConfirmForSingle = (sessionId: string, itemName?: string) => {
     setConfirmConfig({ type: 'single', sessionId, itemName });
@@ -86,6 +107,36 @@ export default function Dashboard() {
   const openConfirmForBulk = () => {
     setConfirmConfig({ type: 'bulk' });
     setConfirmOpen(true);
+  };
+
+  // Function to fetch user invoices
+  const fetchInvoices = async () => {
+    if (!user) {return;}
+    
+    setInvoicesLoading(true);
+    try {
+      const response = await fetch('/api/user-invoices');
+      if (response.ok) {
+        const data = await response.json();
+        setInvoices(data.invoices || []);
+      } else {
+        console.error('Failed to fetch invoices');
+        setInvoices([]);
+      }
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      setInvoices([]);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
+  // Fetch invoices when toggle is clicked
+  const handleToggleInvoices = () => {
+    if (!showInvoices && invoices.length === 0) {
+      fetchInvoices();
+    }
+    setShowInvoices(!showInvoices);
   };
 
   const confirmDeletion = async () => {
@@ -98,47 +149,7 @@ export default function Dashboard() {
     setConfirmOpen(false);
   };
 
-  // Load conversation logs to check for resumable interviews
-  const loadConversationLogs = async () => {
-    try {
-      const response = await fetch('/api/get-conversation-logs', {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('📊 Conversation logs response:', responseData);
-        
-        // Extract logs array from the response
-        const logs = responseData.logs || [];
-        setConversationLogs(responseData);
-        
-        // Check for resumable interviews
-        // For now, we'll use a default 10 questions per interview
-        // In the future, this could be dynamic based on the interview type
-        const defaultQuestionCount = 10;
-        
-        // Find the most recent incomplete interview across all agents
-        let bestResumeOption = null;
-        
-        for (const log of logs) {
-          const resumeCheck = canResumeInterview([log], log.agent_id, defaultQuestionCount);
-          if (resumeCheck.canResume && resumeCheck.progress) {
-            bestResumeOption = {
-              agentId: log.agent_id,
-              agentName: log.agent_name,
-              progress: resumeCheck.progress,
-              logId: log.id
-            };
-            break; // Take the most recent one
-          }
-        }
-        
-        setResumeInfo(bestResumeOption);
-      }
-    } catch (error) {
-      console.error('Error loading conversation logs:', error);
-    }
-  };
+
 
   // Function to handle reset and retry for completed sessions
   const handleResetAndRetry = async (session: PracticeSession) => {
@@ -232,16 +243,15 @@ return session.type.replace(' Interview', '');
     fetchPracticeSessions();
       // Also load interview sessions for resume functionality
       loadAllSessions();
-      // Load conversation logs to check for resumable interviews
-      loadConversationLogs();
+
     } else {
       // Reset loading state when user is not authenticated
       setLoading(false);
       setRecentSessions([]);
       setAllSessions([]);
       setTotalSessions(0);
-      setConversationLogs([]);
-      setResumeInfo(null);
+
+
     }
   }, [isAuthenticated, user]); // Only depend on auth state, not the function
 
@@ -276,59 +286,7 @@ return session.type.replace(' Interview', '');
     router.push('/upload?mode=text');
   };
 
-    const handleContinuePractice = async () => {
-    // Check for resumable interviews based on conversation logs
-    if (resumeInfo) {
-      try {
-        setLoading(true);
-        console.log('🔄 Resuming interview from conversation logs:', {
-          agent: resumeInfo.agentName,
-          questionsAnswered: resumeInfo.progress.questionsAnswered,
-          nextQuestion: resumeInfo.progress.nextQuestionNumber
-        });
-        
-        // Navigate to practice page with resume parameters
-        // We'll pass the log ID and agent info to restore the conversation
-        const resumeParams = new URLSearchParams({
-          resumeFromLog: resumeInfo.logId,
-          agentId: resumeInfo.agentId,
-          questionsAnswered: resumeInfo.progress.questionsAnswered.toString(),
-          nextQuestion: resumeInfo.progress.nextQuestionNumber.toString()
-        });
-        
-        router.push(`/practice/new?${resumeParams.toString()}`);
-        
-        toast({
-          title: "Interview Resumed",
-          description: `Continuing interview with ${resumeInfo.agentName}. Starting from question ${resumeInfo.progress.nextQuestionNumber} of ${resumeInfo.progress.totalQuestions}.`,
-        });
-      } catch (error) {
-        console.error('Error resuming interview:', error);
-        toast({
-          title: "Resume Failed",
-          description: "Failed to resume interview. You can start a new practice instead.",
-        });
-      } finally {
-        setLoading(false);
-      }
-    } else if (recentSessions.length > 0) {
-      // Fallback to old system for backward compatibility
-      const lastSession = recentSessions[0];
-      if (lastSession.status !== 'completed') {
-        router.push(`/practice/continue/${lastSession.id}`);
-    } else {
-      toast({
-          title: "No active session",
-          description: "All recent sessions are completed. Start a new practice session.",
-        });
-      }
-    } else {
-      toast({
-        title: "No sessions to resume",
-        description: "Start your first practice session to begin.",
-      });
-    }
-  };
+
 
   const handleViewProgress = () => {
     router.push('/dashboard');
@@ -616,37 +574,7 @@ return session.type.replace(' Interview', '');
             </div>
           </motion.div>
 
-          {/* Continue Practice */}
-          <motion.div
-            whileTap={{ scale: 0.95 }}
-              className={`bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50 ${
-                (sessionsLoading || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-              }`}
-              onClick={!sessionsLoading && !loading ? handleContinuePractice : undefined}
-          >
-            <div className="flex flex-col items-center text-center space-y-2">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  resumeInfo
-                    ? 'bg-green-100' 
-                    : 'bg-purple-100'
-                }`}>
-                  <ClockIcon className={`w-6 h-6 ${
-                    resumeInfo
-                      ? 'text-green-600' 
-                      : 'text-purple-600'
-                  }`} />
-              </div>
-                <span className="text-sm font-medium text-gray-900">
-                  {loading ? 'Loading...' : 'Continue Practice'}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {resumeInfo
-                    ? `Resume from Question ${resumeInfo.progress.nextQuestionNumber} from Last Session`
-                    : 'Start new interview'
-                  }
-                </span>
-            </div>
-          </motion.div>
+
 
             {/* My Progress */}
           <motion.div
@@ -681,17 +609,28 @@ return session.type.replace(' Interview', '');
             </div>
           </motion.div>
 
-            {/* Credit Balance Card */}
+
+
+            {/* Show/Hide Invoices Button */}
             <motion.div
               whileTap={{ scale: 0.95 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50"
-              onClick={() => router.push('/premium')}
+              className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 active:bg-gray-50 cursor-pointer"
+              onClick={handleToggleInvoices}
             >
               <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <CreditCardIcon className="w-6 h-6 text-emerald-600" />
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+                  showInvoices ? 'bg-green-100' : 'bg-gray-100'
+                }`}>
+                  <CreditCardIcon className={`w-6 h-6 transition-colors ${
+                    showInvoices ? 'text-green-600' : 'text-gray-600'
+                  }`} />
                 </div>
-                <CreditsDisplay variant="detailed" />
+                <span className="text-sm font-medium text-gray-900">
+                  {showInvoices ? 'Hide' : 'Show'} Invoices
+                </span>
+                <span className="text-xs text-gray-500">
+                  {showInvoices ? 'Hide purchase history' : 'View purchase history'}
+                </span>
               </div>
             </motion.div>
         </div>
@@ -704,8 +643,8 @@ return session.type.replace(' Interview', '');
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-semibold text-gray-900">Progress Analytics</h3>
                 <button
-                  onClick={() => setShowProgressDetails(false)}
                   className="text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowProgressDetails(false)}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -807,12 +746,104 @@ return session.type.replace(' Interview', '');
           </div>
         )}
 
+        {/* Invoice History - Entire card hidden when showInvoices is false */}
+        {showInvoices && (
+          <div className="px-4 pb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                          <div className="px-4 py-3 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <CreditCardIcon className="w-5 h-5 mr-2 text-blue-600" />
+                  Purchase History
+                </h3>
+                <button
+                  className="px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 transition-colors"
+                  onClick={handleToggleInvoices}
+                >
+                  {showInvoices ? 'Hide' : 'Show'} Invoices
+                </button>
+              </div>
+            </div>
+              
+              {/* Invoice Content */}
+              <div className="p-4">
+                {invoicesLoading ? (
+                  <div className="text-center py-6">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Loading invoices...</p>
+                  </div>
+                ) : invoices.length > 0 ? (
+                  <div className="space-y-3">
+                    {invoices.map((invoice) => (
+                      <div key={invoice.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              invoice.status === 'paid' ? 'bg-green-500' : 
+                              invoice.status === 'open' ? 'bg-yellow-500' : 
+                              invoice.status === 'draft' ? 'bg-gray-500' : 'bg-red-500'
+                            }`} />
+                            <span className="text-sm font-medium text-gray-900 capitalize">
+                              {invoice.status}
+                            </span>
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {new Date(invoice.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide">Package</p>
+                            <p className="text-sm font-medium text-gray-900">{invoice.package_name}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide">Credits</p>
+                            <p className="text-sm font-medium text-gray-900">{invoice.credits}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide">Amount</p>
+                            <p className="text-sm font-medium text-gray-900">${invoice.amount}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide">Invoice ID</p>
+                            <p className="text-sm font-mono text-gray-600 text-xs">{invoice.stripe_invoice_id}</p>
+                          </div>
+                        </div>
+                        
+                        {invoice.invoice_url && (
+                          <div className="flex justify-end">
+                            <a
+                              href={invoice.invoice_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                            >
+                              View Invoice
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <CreditCardIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">No invoices found</p>
+                    <p className="text-gray-400 text-xs mt-1">Your purchase history will appear here</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Past Practice Sessions */}
         <div className="px-4 pb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="px-4 py-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Past Practice Sessions</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Pause & Finished Sessions</h3>
                 {!isSelecting ? (
                   <>
                     <div className="flex items-center space-x-2">
@@ -881,15 +912,26 @@ return session.type.replace(' Interview', '');
                         />
                       )}
                       <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-sm font-semibold text-gray-900 truncate">
                             Interview with {getSessionDisplayName(session)}
-                        </h4>
+                          </h4>
+                          {/* Status Badge */}
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                            session.status === 'completed' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {session.status === 'completed' ? 'Finished' : 'Paused'}
+                          </span>
+                        </div>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {new Date(session.date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           {session.questionCount} questions
                         </p>
+
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -923,8 +965,8 @@ return session.type.replace(' Interview', '');
                             {/* Reset & Retry Button for Completed Sessions */}
                             <button
                               className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
-                              onClick={() => handleResetAndRetry(session)}
                               title="Reset and retry this interview"
+                              onClick={() => handleResetAndRetry(session)}
                             >
                               Reset & Retry
                             </button>
@@ -996,24 +1038,12 @@ return session.type.replace(' Interview', '');
         </div>
       </div>
 
-        {/* Invoice History - Temporarily removed while migrating to new credit system */}
+      {/* Authentication Recovery - Show when user has authentication issues */}
+      {!isAuthenticated && (
         <div className="px-4 pb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <CreditCardIcon className="w-5 h-5 mr-2 text-blue-600" />
-                Purchase History
-              </h3>
-            </div>
-            <div className="p-4">
-              <div className="text-center py-6">
-                <CreditCardIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Purchase history temporarily unavailable</p>
-                <p className="text-gray-400 text-xs mt-1">We're updating the credit system</p>
-              </div>
-            </div>
+          <AuthenticationRecovery />
         </div>
-      </div>
+      )}
 
       {/* Quick Stats */}
       <div className="px-4 pb-6">

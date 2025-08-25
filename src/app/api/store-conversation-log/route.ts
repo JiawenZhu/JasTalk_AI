@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
-import { createAdminClient } from '@/lib/supabase';
 
 interface ConversationEntry {
   role: 'user' | 'model';
@@ -17,9 +16,6 @@ export async function POST(request: NextRequest) {
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Use admin client to bypass RLS for conversation logs
-    const adminSupabase = createAdminClient();
 
     const body = await request.json();
     const { 
@@ -42,8 +38,8 @@ export async function POST(request: NextRequest) {
       timestamp: entry.timestamp
     }));
 
-    // Store conversation log in database using admin client
-    const { data: log, error } = await adminSupabase
+    // Store conversation log in database
+    const { data: log, error } = await supabase
       .from('conversation_logs')
       .insert({
         call_id: callId,

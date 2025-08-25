@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase';
+
 import { createServerClient } from '@/lib/supabase-server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Use admin client for database operations
-    const adminSupabase = createAdminClient();
+    const supabase = createAdminClient();
     const body = await request.json();
 
     const { interview_id } = body;
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     // 🔒 PHASE 1: IMMEDIATE DATA INTEGRITY CHECK
     // Prevent analysis of interviews with incomplete conversation data
-    const { data: utterances, error: utterancesError } = await adminSupabase
+    const { data: utterances, error: utterancesError } = await supabase
       .from('utterances')
       .select('speaker, text, timestamp')
       .eq('interview_id', interview_id)
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     
     if (userUtterances.length === 0) {
       console.error(`🚨 INTERVIEW ${interview_id}: No user utterances found - marking as incomplete`);
-      await adminSupabase
+      await supabase
         .from('interviews')
         .update({ 
           status: 'incomplete',
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     
     if (agentUtterances.length === 0) {
       console.error(`🚨 INTERVIEW ${interview_id}: No agent utterances found - marking as incomplete`);
-      await adminSupabase
+      await supabase
         .from('interviews')
         .update({ 
           status: 'incomplete',
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     console.log(`✅ INTERVIEW ${interview_id}: Data integrity check passed. User: ${userUtterances.length}, Agent: ${agentUtterances.length}`);
 
     // Fetch interview and utterances
-    const { data: interview, error: interviewError } = await adminSupabase
+    const { data: interview, error: interviewError } = await supabase
       .from('interviews')
       .select(`
         *,
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update interview status to processing
-    await adminSupabase
+    await supabase
       .from('interviews')
       .update({ status: 'PROCESSING_ANALYSIS' })
       .eq('id', interview_id);
@@ -178,7 +178,7 @@ Focus on:
       const processingTime = (Date.now() - startTime) / 1000;
 
       // Store analysis in database
-      const { data: analysis, error: analysisError } = await adminSupabase
+      const { data: analysis, error: analysisError } = await supabase
         .from('interview_analysis')
         .insert({
           interview_id,
@@ -199,7 +199,7 @@ Focus on:
       }
 
       // Update interview status to complete
-      await adminSupabase
+      await supabase
         .from('interviews')
         .update({ 
           status: 'ANALYSIS_COMPLETE',
@@ -219,7 +219,7 @@ Focus on:
       console.error('Gemini API error:', apiError);
       
       // Revert interview status
-      await adminSupabase
+      await supabase
         .from('interviews')
         .update({ status: 'COMPLETED' })
         .eq('id', interview_id);

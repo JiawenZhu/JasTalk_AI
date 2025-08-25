@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase';
+
 import { createServerClient } from '@/lib/supabase-server';
 
 // POST /api/utterances - Log conversation utterances
@@ -13,14 +13,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Use admin client for database operations
-    const adminSupabase = createAdminClient();
     const body = await request.json();
 
     const { interview_id, utterances } = body;
 
     // Validate interview belongs to user
-    const { data: interview, error: interviewError } = await adminSupabase
+    const { data: interview, error: interviewError } = await supabase
       .from('interviews')
       .select('id')
       .eq('id', interview_id)
@@ -45,7 +43,7 @@ export async function POST(request: NextRequest) {
       confidence_score: utterance.confidence_score || null
     }));
 
-    const { data: insertedUtterances, error } = await adminSupabase
+    const { data: insertedUtterances, error } = await supabase
       .from('utterances')
       .insert(processedUtterances)
       .select();

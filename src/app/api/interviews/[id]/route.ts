@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase';
+
 import { createServerClient } from '@/lib/supabase-server';
 
 // GET /api/interviews/[id] - Fetch specific interview
@@ -17,9 +17,9 @@ export async function GET(
     }
     
     // Use admin client for database operations
-    const adminSupabase = createAdminClient();
+    const supabase = createAdminClient();
 
-    const { data: interview, error } = await adminSupabase
+    const { data: interview, error } = await supabase
       .from('interviews')
       .select(`
         *,
@@ -56,7 +56,7 @@ export async function PATCH(
     }
     
     // Use admin client for database operations
-    const adminSupabase = createAdminClient();
+    const supabase = createAdminClient();
     const body = await request.json();
 
     const { status, questions_answered, completed_at } = body;
@@ -65,7 +65,7 @@ export async function PATCH(
     if (questions_answered !== undefined) updateData.questions_answered = questions_answered;
     if (completed_at !== undefined) updateData.completed_at = completed_at;
 
-    const { data: interview, error } = await adminSupabase
+    const { data: interview, error } = await supabase
       .from('interviews')
       .update(updateData)
       .eq('id', params.id)

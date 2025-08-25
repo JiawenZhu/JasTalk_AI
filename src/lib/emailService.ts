@@ -11,8 +11,12 @@ export interface WelcomeEmailData extends EmailData {
 }
 
 export interface PasswordResetData extends EmailData {
+  username: string;
   resetUrl: string;
-  expiresIn: string;
+  expiryTime: string;
+  supportEmail: string;
+  requestTime: string;
+  ipAddress: string;
 }
 
 export interface InterviewCompletionData extends EmailData {
@@ -23,6 +27,24 @@ export interface InterviewCompletionData extends EmailData {
   feedback: string;
   improvementTips: string[];
   nextSteps: string;
+  // Gemini analysis fields for enhanced completion reports
+  geminiAnalysis?: {
+    analysisType?: string;
+    executiveSummary: string;
+    detailedLog: string;
+    keyInsights: string[];
+    qualityAssessment: {
+      score: number;
+      reasoning: string;
+    };
+    discrepancyAnalysis: string;
+    recommendations: string[];
+    localVsGemini: {
+      localCapturedTurns: number;
+      localSpeakers: string[];
+      analysisQuality: number | string;
+    };
+  };
 }
 
 export interface CreditPurchaseData extends EmailData {
@@ -95,6 +117,52 @@ export interface InterviewPauseSummaryData extends EmailData {
     timestamp: string;
   }>;
   resumeUrl: string;
+  // New Gemini analysis fields
+  geminiAnalysis?: {
+    executiveSummary: string;
+    detailedLog: string;
+    keyInsights: string[];
+    qualityAssessment: {
+      score: number;
+      reasoning: string;
+    };
+    discrepancyAnalysis: string;
+    recommendations: string[];
+    localVsGemini: {
+      localCapturedTurns: number;
+      localSpeakers: string[];
+      analysisQuality: number | string;
+    };
+  };
+}
+
+export interface NewLoginAlertData extends EmailData {
+  username: string;
+  loginTime: string;
+  location: string;
+  deviceInfo: string;
+  ipAddress: string;
+  userAgent: string;
+  loginUrl: string;
+  secureAccountUrl: string;
+  supportEmail: string;
+}
+
+export interface PasswordResetData extends EmailData {
+  username: string;
+  resetUrl: string;
+  expiryTime: string;
+  supportEmail: string;
+  requestTime: string;
+  ipAddress: string;
+}
+
+export interface AccountVerificationData extends EmailData {
+  username: string;
+  verificationUrl: string;
+  expiryTime: string;
+  supportEmail: string;
+  accountType: 'signup' | 'email_change';
 }
 
 class EmailService {
@@ -247,10 +315,75 @@ class EmailService {
     }
   }
 
-  // Send interview pause summary email
+  // Send interview pause summary email with retry logic
   async sendInterviewPauseSummaryEmail(data: InterviewPauseSummaryData): Promise<boolean> {
+    const maxRetries = 3;
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`📧 Email service: Attempt ${attempt}/${maxRetries} to send pause summary email`);
+        
+        const response = await fetch(`${this.getBaseUrl()}/api/emails/interview-pause-summary`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ Email attempt ${attempt} failed with status ${response.status}:`, errorText);
+          
+          // Try to parse error details
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.details) {
+              console.error('📋 Error details:', errorData.details);
+            }
+          } catch (parseError) {
+            // Ignore parse errors
+          }
+          
+          lastError = new Error(`HTTP ${response.status}: ${errorText}`);
+          
+          // If this is the last attempt, don't wait
+          if (attempt === maxRetries) break;
+          
+          // Wait before retry (exponential backoff)
+          const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`⏳ Email service: Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        const result = await response.json();
+        console.log('✅ Email sent successfully on attempt', attempt, 'Result:', result);
+        return true;
+        
+      } catch (error: any) {
+        lastError = error;
+        console.error(`❌ Email attempt ${attempt} failed with exception:`, error);
+        
+        // If this is the last attempt, don't wait
+        if (attempt === maxRetries) break;
+        
+        // Wait before retry (exponential backoff)
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`⏳ Email service: Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+    
+    console.error('❌ All email attempts failed. Final error:', lastError);
+    return false;
+  }
+
+  // Send new login alert email
+  async sendNewLoginAlertEmail(data: NewLoginAlertData): Promise<boolean> {
     try {
-      const response = await fetch(`${this.getBaseUrl()}/api/emails/interview-pause-summary`, {
+      const response = await fetch(`${this.getBaseUrl()}/api/emails/new-login-alert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -259,13 +392,36 @@ class EmailService {
       });
 
       if (!response.ok) {
-        console.error('Interview pause summary email failed:', await response.text());
+        console.error('New login alert email failed:', await response.text());
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('Interview pause summary email error:', error);
+      console.error('New login alert email error:', error);
+      return false;
+    }
+  }
+
+  // Send account verification email
+  async sendAccountVerificationEmail(data: AccountVerificationData): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.getBaseUrl()}/api/emails/account-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        console.error('Account verification email failed:', await response.text());
+        return false;
+      }
+
+        return true;
+    } catch (error) {
+      console.error('Account verification email error:', error);
       return false;
     }
   }
@@ -308,6 +464,12 @@ class EmailService {
             break;
           case 'password-reset':
             result = await this.sendPasswordResetEmail(email.data);
+            break;
+          case 'new-login-alert':
+            result = await this.sendNewLoginAlertEmail(email.data);
+            break;
+          case 'account-verification':
+            result = await this.sendAccountVerificationEmail(email.data);
             break;
           case 'interview-completion':
             result = await this.sendInterviewCompletionEmail(email.data);
@@ -353,5 +515,7 @@ export const sendCreditPurchaseEmail = emailService.sendCreditPurchaseEmail.bind
 export const sendSecurityAlertEmail = emailService.sendSecurityAlertEmail.bind(emailService);
 export const sendInvoiceEmail = emailService.sendInvoiceEmail.bind(emailService);
 export const sendInterviewPauseSummaryEmail = emailService.sendInterviewPauseSummaryEmail.bind(emailService);
+export const sendNewLoginAlertEmail = emailService.sendNewLoginAlertEmail.bind(emailService);
+export const sendAccountVerificationEmail = emailService.sendAccountVerificationEmail.bind(emailService);
 export const sendTestEmail = emailService.sendTestEmail.bind(emailService);
 export const sendMultipleEmails = emailService.sendMultipleEmails.bind(emailService);

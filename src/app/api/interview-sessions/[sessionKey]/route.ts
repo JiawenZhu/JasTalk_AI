@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
-import { createAdminClient } from '@/lib/supabase';
 
 interface UpdateSessionRequest {
   currentQuestionIndex?: number;
@@ -30,9 +29,8 @@ export async function GET(
     }
 
     const { sessionKey } = params;
-    const adminSupabase = createAdminClient();
 
-    const { data: session, error } = await adminSupabase
+    const { data: session, error } = await supabase
       .from('interview_sessions')
       .select('*')
       .eq('session_key', sessionKey)
@@ -103,10 +101,8 @@ export async function PATCH(
       confidenceScore
     } = body;
 
-    const adminSupabase = createAdminClient();
-
     // First, get the current session to validate and compare
-    const { data: currentSession, error: fetchError } = await adminSupabase
+    const { data: currentSession, error: fetchError } = await supabase
       .from('interview_sessions')
       .select('*')
       .eq('session_key', sessionKey)
@@ -142,7 +138,7 @@ export async function PATCH(
     }
 
     // Update the session
-    const { data: updatedSession, error: updateError } = await adminSupabase
+    const { data: updatedSession, error: updateError } = await supabase
       .from('interview_sessions')
       .update(updateData)
       .eq('session_key', sessionKey)
@@ -161,7 +157,7 @@ export async function PATCH(
     // Create snapshot if specified
     if (snapshotType && currentQuestionIndex !== undefined) {
       try {
-        await adminSupabase
+        await supabase
           .from('interview_session_snapshots')
           .insert({
             session_id: currentSession.id,
@@ -240,10 +236,9 @@ export async function DELETE(
     }
 
     const { sessionKey } = params;
-    const adminSupabase = createAdminClient();
 
     // Mark session as abandoned instead of deleting
-    const { data: updatedSession, error } = await adminSupabase
+    const { data: updatedSession, error } = await supabase
       .from('interview_sessions')
       .update({ 
         status: 'abandoned',

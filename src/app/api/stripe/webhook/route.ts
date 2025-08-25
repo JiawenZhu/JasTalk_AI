@@ -1,25 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, getWebhookSecret } from '@/lib/stripe';
-import { createAdminClient } from '@/lib/supabase';
+
 import { CREDIT_PACKAGES, SIMPLIFIED_CREDIT_PACKS } from '@/lib/credit-packages';
 import { emailService } from '@/lib/emailService';
 
 export async function POST(request: NextRequest) {
+  console.log('🔔 Webhook: Request received at', new Date().toISOString());
+  console.log('🔔 Webhook: Headers:', Object.fromEntries(request.headers.entries()));
+  
   const body = await request.text();
+  console.log('🔔 Webhook: Body length:', body.length);
+  console.log('🔔 Webhook: Body preview:', body.substring(0, 200) + '...');
+  
   const signature = request.headers.get('stripe-signature');
+  console.log('🔔 Webhook: Signature present:', !!signature);
 
   if (!signature) {
-    console.error('Webhook: Missing signature');
+    console.error('❌ Webhook: Missing signature');
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
   let event;
 
   try {
+    console.log('🔔 Webhook: Attempting to verify signature...');
     event = stripe.webhooks.constructEvent(body, signature, getWebhookSecret());
-    console.log('Webhook: Event received:', event.type);
+    console.log('✅ Webhook: Signature verified successfully');
+    console.log('🔔 Webhook: Event received:', event.type);
   } catch (err) {
-    console.error('Webhook: Signature verification failed:', err);
+    console.error('❌ Webhook: Signature verification failed:', err);
+    console.error('❌ Webhook: Error details:', {
+      message: err instanceof Error ? err.message : 'Unknown error',
+      stack: err instanceof Error ? err.stack : 'No stack trace'
+    });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -33,9 +46,10 @@ export async function POST(request: NextRequest) {
   // Handle different webhook events
   if (event.type === 'checkout.session.completed') {
     // This handles one-time payments (credit purchases)
-    console.log('Webhook: Processing one-time payment (checkout.session.completed)');
+    console.log('🎯 Webhook: Processing one-time payment (checkout.session.completed)');
     const session = event.data.object;
-    console.log('Webhook: Processing checkout.session.completed for session:', session.id);
+    console.log('🎯 Webhook: Session ID:', session.id);
+    console.log('🎯 Webhook: Session object:', JSON.stringify(session, null, 2));
     
     try {
       // Use admin client with service role key to bypass RLS

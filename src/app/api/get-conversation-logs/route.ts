@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
-import { createAdminClient } from '@/lib/supabase';
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,12 +18,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '10');
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    // Use admin client to fetch conversation logs
-    const adminSupabase = createAdminClient();
+
     
     // If logId is provided, fetch single log
     if (logId) {
-      const { data: log, error } = await adminSupabase
+      const { data: log, error } = await supabase
         .from('conversation_logs')
         .select('*')
         .eq('id', logId)
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch legacy conversation logs
-    const { data: logs, error } = await adminSupabase
+    const { data: logs, error } = await supabase
       .from('conversation_logs')
       .select('*')
       .eq('candidate_name', user.id || user.user_metadata?.full_name || user.email || 'Anonymous')
@@ -65,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 🔧 FIXED: Fetch NEW PIPELINE interviews with separate utterances query
-    const { data: interviews, error: interviewsError } = await adminSupabase
+    const { data: interviews, error: interviewsError } = await supabase
       .from('interviews')
       .select('*')
       .eq('user_id', user.id)
@@ -80,7 +79,7 @@ export async function GET(request: NextRequest) {
     let allUtterances: any[] = [];
     if (interviews && interviews.length > 0) {
       const interviewIds = interviews.map(i => i.id);
-      const { data: utterances, error: utterancesError } = await adminSupabase
+      const { data: utterances, error: utterancesError } = await supabase
         .from('utterances')
         .select('*')
         .in('interview_id', interviewIds)
@@ -98,7 +97,7 @@ export async function GET(request: NextRequest) {
     let allAnalysis: any[] = [];
     if (interviews && interviews.length > 0) {
       const interviewIds = interviews.map(i => i.id);
-      const { data: analysis, error: analysisError } = await adminSupabase
+      const { data: analysis, error: analysisError } = await supabase
         .from('interview_analysis')
         .select('*')
         .in('interview_id', interviewIds);

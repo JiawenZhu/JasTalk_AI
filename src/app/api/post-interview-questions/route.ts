@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
-import { createAdminClient } from '@/lib/supabase';
+
 
 interface QuestionSubmission {
   questions: string;
@@ -49,13 +49,13 @@ export async function POST(request: NextRequest) {
     console.log(`📋 Question submission: Category=${category}, NeedsFollowUp=${needsFollowUp}`);
 
     // Use admin client to bypass RLS
-    const adminSupabase = createAdminClient();
+    const supabase = createAdminClient();
 
     // Generate unique submission ID
     const submissionId = `question_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Store question in database
-    const { data: questionRecord, error: insertError } = await adminSupabase
+    const { data: questionRecord, error: insertError } = await supabase
       .from('post_interview_questions')
       .insert({
         id: submissionId,
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     // If user needs follow-up, create a notification/task for admin
     if (needsFollowUp) {
       try {
-        await adminSupabase
+        await supabase
           .from('admin_notifications')
           .insert({
             type: 'user_question',
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     // Track analytics
     try {
-      await adminSupabase
+      await supabase
         .from('analytics_events')
         .insert({
           event_type: 'post_interview_question',
@@ -184,8 +184,8 @@ export async function GET(request: NextRequest) {
     const category = url.searchParams.get('category');
     const status = url.searchParams.get('status');
 
-    const adminSupabase = createAdminClient();
-    let query = adminSupabase
+    const supabase = createAdminClient();
+    let query = supabase
       .from('post_interview_questions')
       .select('*')
       .order('submitted_at', { ascending: false })
@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get summary statistics
-    const { data: stats, error: statsError } = await adminSupabase
+    const { data: stats, error: statsError } = await supabase
       .from('post_interview_questions')
       .select('category, needs_followup, rating, status')
       .gte('submitted_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()); // Last 30 days

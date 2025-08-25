@@ -1,0 +1,6 @@
+2025-08-24 02:00:00 - 🚀 Starting Supabase backup process
+[0;34m🚀 Starting Supabase backup process[0m
+2025-08-24 02:00:00 - 🔄 Starting weekly Supabase backup...
+[0;34m🔄 Starting weekly Supabase backup...[0m
+2025-08-24 02:00:00 - ❌ ERROR: Supabase is not running. Please start Supabase first.
+[0;31m❌ ERROR: Supabase is not running. Please start Supabase first.[0m

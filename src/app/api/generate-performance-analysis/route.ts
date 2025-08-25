@@ -112,27 +112,69 @@ export async function POST(request: NextRequest) {
       required: ["summary", "metrics"]
     };
 
-    const prompt = `You are an expert interview assessor. Based on the following interview transcript, provide a comprehensive performance analysis.
+    const prompt = `You are a senior-level corporate interview assessor with extensive experience in evaluating executive and professional candidates. Your role is to provide an objective, rigorous, and evidence-based assessment of interview performance based solely on the provided transcript.
+
+CRITICAL EVALUATION PRINCIPLES:
+- Score ONLY based on OBSERVABLE EVIDENCE in the transcript
+- If a candidate provides no response, insufficient response, or non-substantive responses, score accordingly (0-3 range)
+- Do NOT inflate scores or provide benefit of doubt without concrete evidence
+- Maintain professional objectivity and avoid leniency bias
+- Each score must be justified by specific examples from the transcript
 
 Interview Context:
 - Duration: ${interviewDuration} minutes
-- Objective: ${interviewObjective || 'General assessment'}
+- Objective: ${interviewObjective || 'Comprehensive professional assessment'}
 - Candidate: ${userName || 'The candidate'}
 
-Evaluation Criteria:
-1. **Technical Knowledge** (0-10): Understanding of technical concepts, accuracy of responses, depth of knowledge
-2. **Communication Skills** (0-10): Clarity of expression, listening skills, ability to articulate thoughts
-3. **Behavioral & Soft Skills** (0-10): Problem-solving approach, teamwork mindset, adaptability, emotional intelligence
-4. **Time Management** (0-10): Ability to provide concise yet complete answers, staying on topic
-5. **Stress & Adaptability** (0-10): Composure under pressure, handling difficult questions, flexibility
+EVALUATION CRITERIA & SCORING STANDARDS:
 
-For each category:
-- Provide a score from 0-10 (where 10 is exceptional, 8-9 is strong, 6-7 is adequate, 4-5 needs improvement, 0-3 is poor)
-- Give specific, constructive feedback based on observable behavior in the transcript
-- Be encouraging but honest in your assessment
+1. **Technical Knowledge** (0-10)
+   - 9-10: Demonstrates exceptional depth, accuracy, and nuanced understanding
+   - 7-8: Shows strong knowledge with minor gaps or inaccuracies
+   - 5-6: Displays adequate knowledge with some gaps or surface-level understanding
+   - 3-4: Limited knowledge with significant gaps or inaccuracies
+   - 0-2: Minimal to no technical knowledge demonstrated
+
+2. **Communication Skills** (0-10)
+   - 9-10: Exceptional clarity, articulation, and professional communication
+   - 7-8: Clear, well-structured responses with minor communication issues
+   - 5-6: Generally understandable with some clarity or structure issues
+   - 3-4: Unclear or poorly structured communication
+   - 0-2: Incomprehensible or no communication demonstrated
+
+3. **Behavioral & Soft Skills** (0-10)
+   - 9-10: Demonstrates exceptional problem-solving, adaptability, and emotional intelligence
+   - 7-8: Shows strong behavioral competencies with minor areas for improvement
+   - 5-6: Adequate behavioral skills with some limitations
+   - 3-4: Limited behavioral competencies or poor problem-solving approach
+   - 0-2: Minimal to no behavioral skills demonstrated
+
+4. **Time Management** (0-10)
+   - 9-10: Exceptional ability to provide comprehensive yet concise responses
+   - 7-8: Good balance of detail and conciseness
+   - 5-6: Adequate time management with some verbosity or brevity
+   - 3-4: Poor time management (excessively long or short responses)
+   - 0-2: No time management demonstrated or responses completely off-topic
+
+5. **Stress & Adaptability** (0-10)
+   - 9-10: Exceptional composure under pressure and adaptability to challenges
+   - 7-8: Maintains good composure with minor stress indicators
+   - 5-6: Generally handles pressure adequately with some stress signs
+   - 3-4: Shows significant stress or poor adaptability
+   - 0-2: Poor stress management or no adaptability demonstrated
+
+SCORING REQUIREMENTS:
+- Each score MUST be supported by specific evidence from the transcript
+- If insufficient data exists for a category, score 0-2 with explanation
+- Do NOT award passing scores (5+) without substantial evidence
+- Be particularly strict about awarding high scores (7+) - require exceptional performance
+- For categories with no candidate responses, score 0-1 with clear justification
 
 Interview Transcript:
 ${transcript}
+
+ASSESSMENT INSTRUCTIONS:
+Analyze the transcript with strict adherence to the scoring standards above. Provide objective, evidence-based scores that accurately reflect the candidate's demonstrated abilities. Each metric must include specific examples from the transcript to justify the assigned score.
 
 Provide your analysis in the specified JSON format.`;
 
@@ -163,15 +205,15 @@ Provide your analysis in the specified JSON format.`;
       console.error('❌ Failed to parse analysis JSON:', parseError);
       console.log('📄 Raw response:', response.text());
       
-      // Fallback: Create a basic analysis structure
+      // Fallback: Create a conservative analysis structure when parsing fails
       analysisData = {
-        summary: `Interview completed with ${conversationHistory.length} exchanges. Unable to generate detailed analysis due to parsing error.`,
+        summary: `Interview completed with ${conversationHistory.length} exchanges. Detailed analysis unavailable due to technical processing error. Conservative scoring applied.`,
         metrics: [
-          { category: "Technical Knowledge", score: 6.0, notes: "Analysis temporarily unavailable due to technical issues." },
-          { category: "Communication Skills", score: 6.0, notes: "Analysis temporarily unavailable due to technical issues." },
-          { category: "Behavioral & Soft Skills", score: 6.0, notes: "Analysis temporarily unavailable due to technical issues." },
-          { category: "Time Management", score: 6.0, notes: "Analysis temporarily unavailable due to technical issues." },
-          { category: "Stress & Adaptability", score: 6.0, notes: "Analysis temporarily unavailable due to technical issues." }
+          { category: "Technical Knowledge", score: 2.0, notes: "Unable to assess due to technical processing error. Conservative scoring applied." },
+          { category: "Communication Skills", score: 2.0, notes: "Unable to assess due to technical processing error. Conservative scoring applied." },
+          { category: "Behavioral & Soft Skills", score: 2.0, notes: "Unable to assess due to technical processing error. Conservative scoring applied." },
+          { category: "Time Management", score: 2.0, notes: "Unable to assess due to technical processing error. Conservative scoring applied." },
+          { category: "Stress & Adaptability", score: 2.0, notes: "Unable to assess due to technical processing error. Conservative scoring applied." }
         ]
       };
     }
@@ -189,17 +231,49 @@ Provide your analysis in the specified JSON format.`;
     const providedCategories = analysisData.metrics.map((m: any) => m.category);
     const missingCategories = requiredCategories.filter(cat => !providedCategories.includes(cat));
 
-    // Add missing categories with default scores
+    // Add missing categories with conservative default scores
     missingCategories.forEach(category => {
       analysisData.metrics.push({
         category,
-        score: 6.0, // Default neutral score
-        notes: "Insufficient data to evaluate this category during the interview."
+        score: 2.0, // Conservative default score - insufficient data
+        notes: "Insufficient data to evaluate this category during the interview. Conservative scoring applied."
       });
     });
 
+    // Validate and flag suspicious scoring patterns
+    const suspiciousScores: string[] = [];
+    analysisData.metrics.forEach((metric: any) => {
+      // Flag scores that seem too high for incomplete interviews
+      if (metric.score >= 7 && conversationHistory.length < 4) {
+        suspiciousScores.push(`${metric.category}: High score (${metric.score}) for limited conversation data`);
+      }
+      
+      // Flag scores that seem too high without substantial responses
+      if (metric.score >= 8) {
+        const userResponses = conversationHistory.filter(entry => entry.role === 'user');
+        const substantialResponses = userResponses.filter(entry => entry.text.length > 20);
+        if (substantialResponses.length < 2) {
+          suspiciousScores.push(`${metric.category}: Very high score (${metric.score}) with minimal substantial responses`);
+        }
+      }
+      
+      // Ensure scores are within valid range
+      if (metric.score < 0 || metric.score > 10) {
+        console.warn(`⚠️ Invalid score detected: ${metric.category} = ${metric.score}, clamping to valid range`);
+        metric.score = Math.max(0, Math.min(10, metric.score));
+      }
+    });
+
+    // Log suspicious scoring for monitoring
+    if (suspiciousScores.length > 0) {
+      console.warn('⚠️ Suspicious scoring patterns detected:', suspiciousScores);
+    }
+
     console.log('✅ Analysis generation completed successfully');
     console.log(`📊 Analysis contains ${analysisData.metrics?.length || 0} metrics`);
+    if (suspiciousScores.length > 0) {
+      console.log(`⚠️ ${suspiciousScores.length} suspicious scoring patterns flagged`);
+    }
     
     return NextResponse.json({
       success: true,
@@ -233,15 +307,15 @@ Provide your analysis in the specified JSON format.`;
       }
     }
     
-    // Create a fallback analysis for critical failures
+    // Create a conservative fallback analysis for critical failures
     const fallbackAnalysis = {
-      summary: `Interview session completed. Analysis generation encountered technical difficulties but your interview data has been saved.`,
+      summary: `Interview session completed. Analysis generation encountered technical difficulties but your interview data has been saved. Conservative scoring applied.`,
       metrics: [
-        { category: "Technical Knowledge", score: 7.0, notes: "Please contact support to regenerate your detailed analysis." },
-        { category: "Communication Skills", score: 7.0, notes: "Please contact support to regenerate your detailed analysis." },
-        { category: "Behavioral & Soft Skills", score: 7.0, notes: "Please contact support to regenerate your detailed analysis." },
-        { category: "Time Management", score: 7.0, notes: "Please contact support to regenerate your detailed analysis." },
-        { category: "Stress & Adaptability", score: 7.0, notes: "Please contact support to regenerate your detailed analysis." }
+        { category: "Technical Knowledge", score: 2.0, notes: "Analysis unavailable due to technical issues. Conservative scoring applied." },
+        { category: "Communication Skills", score: 2.0, notes: "Analysis unavailable due to technical issues. Conservative scoring applied." },
+        { category: "Behavioral & Soft Skills", score: 2.0, notes: "Analysis unavailable due to technical issues. Conservative scoring applied." },
+        { category: "Time Management", score: 2.0, notes: "Analysis unavailable due to technical issues. Conservative scoring applied." },
+        { category: "Stress & Adaptability", score: 2.0, notes: "Analysis unavailable due to technical issues. Conservative scoring applied." }
       ]
     };
     

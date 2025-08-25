@@ -39,24 +39,26 @@ export default function CreditsDisplay({
 
   // Get status color
   const getStatusColor = () => {
-    if (error) return 'text-red-600';
-    if (!hasCredits) return 'text-red-600';
+    if (error) {return 'text-red-600';}
+    if (!hasCredits) {return 'text-red-600';}
     
     const totalMinutes = state.minutes + (state.seconds > 0 ? 1 : 0);
-    if (totalMinutes < 5) return 'text-orange-600';
-    if (totalMinutes < 15) return 'text-yellow-600';
-    return 'text-green-600';
+    if (totalMinutes < 5) {return 'text-orange-600';}
+    if (totalMinutes < 15) {return 'text-yellow-600';}
+    
+return 'text-green-600';
   };
 
   // Get background color
   const getBackgroundColor = () => {
-    if (error) return 'bg-red-50';
-    if (!hasCredits) return 'bg-red-50';
+    if (error) {return 'bg-red-50';}
+    if (!hasCredits) {return 'bg-red-50';}
     
     const totalMinutes = state.minutes + (state.seconds > 0 ? 1 : 0);
-    if (totalMinutes < 5) return 'bg-orange-50';
-    if (totalMinutes < 15) return 'bg-yellow-50';
-    return 'bg-green-50';
+    if (totalMinutes < 5) {return 'bg-orange-50';}
+    if (totalMinutes < 15) {return 'bg-yellow-50';}
+    
+return 'bg-green-50';
   };
 
   // Loading state
@@ -126,9 +128,9 @@ export default function CreditsDisplay({
           </div>
           {/* Manual refresh button */}
           <button
-            onClick={handleManualRefresh}
             className="ml-2 p-1 rounded-full hover:bg-gray-200 transition-colors"
             title="Refresh credits"
+            onClick={handleManualRefresh}
           >
             <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

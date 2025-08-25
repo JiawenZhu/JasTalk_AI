@@ -11,6 +11,24 @@ interface InterviewCompletionRequest {
   feedback: string;
   improvementTips: string[];
   nextSteps: string;
+  // Gemini analysis fields for enhanced completion reports
+  geminiAnalysis?: {
+    analysisType?: string;
+    executiveSummary: string;
+    detailedLog: string;
+    keyInsights: string[];
+    qualityAssessment: {
+      score: number;
+      reasoning: string;
+    };
+    discrepancyAnalysis: string;
+    recommendations: string[];
+    localVsGemini: {
+      localCapturedTurns: number;
+      localSpeakers: string[];
+      analysisQuality: number | string;
+    };
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -24,7 +42,8 @@ export async function POST(request: NextRequest) {
       duration, 
       feedback, 
       improvementTips, 
-      nextSteps 
+      nextSteps,
+      geminiAnalysis
     }: InterviewCompletionRequest = await request.json();
 
     if (!to || !username || !interviewTitle) {
@@ -105,6 +124,67 @@ export async function POST(request: NextRequest) {
                 </p>
               </div>
             </div>
+
+            <!-- AI Performance Analysis -->
+            ${geminiAnalysis ? `
+            <div style="margin: 25px 0;">
+              <h3 style="color: #2d3748; margin-bottom: 15px;">🤖 AI Performance Analysis</h3>
+              
+              <!-- Executive Summary -->
+              ${geminiAnalysis.executiveSummary ? `
+              <div style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h4 style="color: #111827; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">📋 Executive Summary</h4>
+                <p style="color: #374151; margin: 0; font-size: 14px; line-height: 1.6;">${geminiAnalysis.executiveSummary}</p>
+              </div>
+              ` : ''}
+              
+              <!-- Quality Assessment -->
+              ${geminiAnalysis.qualityAssessment ? `
+              <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h4 style="color: #111827; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">⭐ Quality Assessment</h4>
+                <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                  <div style="background: #10b981; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin-right: 16px;">
+                    <span style="font-size: 20px; font-weight: 700;">${geminiAnalysis.qualityAssessment.score}</span>
+                  </div>
+                  <div>
+                    <div style="font-size: 18px; font-weight: 600; color: #059669; margin-bottom: 4px;">${geminiAnalysis.qualityAssessment.score}/10</div>
+                    <div style="color: #374151; font-size: 13px;">${geminiAnalysis.qualityAssessment.reasoning}</div>
+                  </div>
+                </div>
+              </div>
+              ` : ''}
+              
+              <!-- Key Insights -->
+              ${geminiAnalysis.keyInsights && geminiAnalysis.keyInsights.length > 0 ? `
+              <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h4 style="color: #111827; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">🔍 Key Insights</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                  ${geminiAnalysis.keyInsights.map((insight, index) => `
+                    <div style="background: #ffffff; border-radius: 6px; padding: 12px; border-left: 3px solid #f59e0b;">
+                      <div style="font-weight: 600; color: #92400e; margin-bottom: 4px; font-size: 13px;">Insight ${index + 1}</div>
+                      <div style="color: #374151; font-size: 13px; line-height: 1.5;">${insight}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              ` : ''}
+              
+              <!-- Recommendations -->
+              ${geminiAnalysis.recommendations && geminiAnalysis.recommendations.length > 0 ? `
+              <div style="background: #fdf2f8; border: 1px solid #ec4899; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h4 style="color: #111827; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">💡 AI Recommendations</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                  ${geminiAnalysis.recommendations.map((rec, index) => `
+                    <div style="background: #ffffff; border-radius: 6px; padding: 12px; border-left: 3px solid #ec4899;">
+                      <div style="font-weight: 600; color: #be185d; margin-bottom: 4px; font-size: 13px;">Recommendation ${index + 1}</div>
+                      <div style="color: #374151; font-size: 13px; line-height: 1.5;">${rec}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              ` : ''}
+            </div>
+            ` : ''}
 
             <!-- CTA Button -->
             <div style="text-align: center; margin: 40px 0;">
