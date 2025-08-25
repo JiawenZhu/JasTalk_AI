@@ -3,6 +3,12 @@ import { SIMPLIFIED_CREDIT_PACKS, CREDIT_PACKAGES } from '@/lib/credit-packages'
 import { createAdminClient } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
+  // Temporarily disabled due to type issues
+  return NextResponse.json({ 
+    error: 'This endpoint is temporarily disabled for maintenance' 
+  }, { status: 503 });
+  
+  /*
   try {
     const body = await request.json();
     const { userId, packageId, amount, sessionId, email } = body;
@@ -211,4 +217,5 @@ export async function POST(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
+  */
 }
