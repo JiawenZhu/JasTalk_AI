@@ -3127,8 +3127,7 @@ return 10;
         </div>
       </CreditValidation>
   );
+  */
 }
-
-export default NewPracticePage;
 
 
